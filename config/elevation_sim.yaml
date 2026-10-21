@@ -1,0 +1,19 @@
+# elevation_mapping_cupy overrides for the Isaac Sim Go2 (on top of the package's core_param.yaml).
+/elevation_mapping_node:
+  ros__parameters:
+    map_frame: 'odom'            # BIEVR-LIO's odometry frame
+    base_frame: 'imu'            # BIEVR body frame = Go2 base; map is centred here
+    corrected_map_frame: 'odom'
+    subscribers:
+      lidar:
+        topic_name: '/lidar/points'
+        data_type: pointcloud
+    publishers:
+      elevation_map_raw:
+        layers: ['elevation', 'traversability', 'variance']
+        basic_layers: ['elevation']
+        fps: 5.0
+      elevation_map_filter:
+        layers: ['min_filter', 'smooth', 'near_base_filtered', 'despiked', 'inpaint', 'elevation']
+        basic_layers: ['min_filter', 'smooth', 'near_base_filtered', 'despiked', 'inpaint']
+        fps: 3.0

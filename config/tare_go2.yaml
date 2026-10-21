@@ -1,0 +1,134 @@
+# TARE parameters for the Isaac Sim Go2, derived from tare_planner config/tunnel.yaml (humble-jazzy).
+# Changed values are marked "Go2: was ...".
+tare_planner_node:
+  ros__parameters:
+    sub_start_exploration_topic_ : /start_exploration
+    sub_terrain_map_topic_ : /terrain_map
+    sub_terrain_map_ext_topic_ : /terrain_map_ext
+    sub_state_estimation_topic_ : /state_estimation_at_scan
+    sub_registered_scan_topic_ : /registered_scan
+    sub_coverage_boundary_topic_ : /sensor_coverage_planner/coverage_boundary
+    sub_viewpoint_boundary_topic_ : /navigation_boundary
+    sub_nogo_boundary_topic_ : /sensor_coverage_planner/nogo_boundary
+    sub_joystick_topic_ : /joy
+    sub_reset_waypoint_topic_ : /reset_waypoint
+    pub_exploration_finish_topic_ : exploration_finish
+    pub_runtime_breakdown_topic_ : runtime_breakdown
+    pub_runtime_topic_ : /runtime
+    pub_waypoint_topic_ : /way_point
+    pub_momentum_activation_count_topic_ : momentum_activation_count
+
+    kAutoStart : true
+    kRushHome : true
+    kUseTerrainHeight : true  # Go2: was false; place viewpoints on the terrain (cave floor is not flat)
+    kCheckTerrainCollision : true
+    kExtendWayPoint : true
+    kUseLineOfSightLookAheadPoint : true
+    kNoExplorationReturnHome : true
+    kExtendWayPointDistanceBig : 5.0  # Go2: was 8.0; see kLookAheadDistance
+    kExtendWayPointDistanceSmall : 2.5  # Go2: was 3.5; see kLookAheadDistance
+    kKeyposeCloudDwzFilterLeafSize : 0.2
+    kRushHomeDist : 5.0
+    kAtHomeDistThreshold : 0.5
+    kTerrainCollisionThreshold : 0.5  # = CMU; 0.2 (earlier Go2 value) put most viewpoints of the boulder-strewn tunnel passage in collision. Real obstacle avoidance is the local planner's job (obstacleHeightThre)
+    kLookAheadDistance : 5.0  # Go2: was 8.0; Go2 walks ~0.5 m/s and the local planner looks ~4 m ahead
+    kUseMomentum : true 
+    kDirectionChangeCounterThr : 3  # was 6 (tunnel.yaml, 2 m/s vehicle); a 0.5 m/s legged robot needs minutes for 6 reversals while dithering
+    kDirectionNoChangeCounterThr : 5
+    kResetWaypointJoystickAxesID : 2
+
+    # PlanningEnv
+    kUseFrontier : true
+    kFrontierClusterTolerance : 1.0
+    kFrontierClusterMinSize : 10  # Go2: was 30 (tunnel.yaml), 10 = indoor.yaml; the frontier at the cave tunnel bend clusters to ~20 points after the vertical filter
+    kUseCoverageBoundaryOnFrontier : false 
+    kUseCoverageBoundaryOnObjectSurface : false
+
+    # Rolling occupancy grid
+    rolling_occupancy_grid/resolution_x : 0.3
+    rolling_occupancy_grid/resolution_y : 0.3
+    rolling_occupancy_grid/resolution_z : 0.3
+
+    kSurfaceCloudDwzLeafSize : 0.3
+    kCollisionCloudDwzLeafSize : 0.2
+    kKeyposeCloudStackNum : 5
+    kPointCloudRowNum : 50
+    kPointCloudColNum : 50
+    kPointCloudLevelNum : 30
+    kMaxCellPointNum : 100000
+    kPointCloudCellSize : 18.0
+    kPointCloudCellHeight : 1.8
+    kPointCloudManagerNeighborCellNum : 5
+    kCoverCloudZSqueezeRatio : 2.0
+
+    # KeyposeGraph
+    keypose_graph/kAddNodeMinDist : 1.0
+    keypose_graph/kAddNonKeyposeNodeMinDist : 0.5
+    keypose_graph/kAddEdgeConnectDistThr : 3.0
+    keypose_graph/kAddEdgeToLastKeyposeDistThr : 3.0
+    keypose_graph/kAddEdgeVerticalThreshold : 1.0
+    keypose_graph/kAddEdgeCollisionCheckResolution : 0.4
+    keypose_graph/kAddEdgeCollisionCheckRadius : 0.3  # Go2: was 0.4; Go2 is narrower than the CMU vehicle
+    keypose_graph/kAddEdgeCollisionCheckPointNumThr : 1
+
+    # ViewPointManager
+    viewpoint_manager/number_x : 50
+    viewpoint_manager/number_y : 50
+    viewpoint_manager/number_z : 1
+    viewpoint_manager/resolution_x : 0.6
+    viewpoint_manager/resolution_y : 0.6
+    viewpoint_manager/resolution_z : 0.0
+    kConnectivityHeightDiffThr : 0.2  # Go2: was 0.25; max height step between neighbouring viewpoints
+    kGreedyViewPointSampleRange : 3
+    kLocalPathOptimizationItrMax : 10
+    kViewPointCollisionMargin : 0.35  # Go2: was 0.5; Go2 half length ~0.35 m; 0.5 m invalidated viewpoints in narrow passages
+    kViewPointCollisionMarginZPlus : 0.3  # Go2: was 0.5; vertical collision band matches Go2 height
+    kViewPointCollisionMarginZMinus : 0.3  # Go2: was 0.5; vertical collision band matches Go2 height
+    kCollisionGridZScale : 1.0
+    kCollisionGridResolutionX : 0.2
+    kCollisionGridResolutionY : 0.2
+    kCollisionGridResolutionZ : 0.0
+    kCollisionPointThr : 1
+    kLineOfSightStopAtNearestObstacle : true
+    kViewPointHeightFromTerrain : 0.5  # Go2: was 0.75; Go2 lidar is ~0.5 m above ground
+    kViewPointHeightFromTerrainChangeThreshold : 0.4  # Go2: was 0.6; scaled with the viewpoint height
+    kCheckDynamicObstacleCollision : false
+    kCollisionFrameCountMax : 3
+
+    kSensorRange : 10.0  # Go2: was 7.5; coverage model range; lidar reaches 100 m, caves are open
+    kNeighborRange : 3.0
+    kCoverageOcclusionThr : 0.3
+    kCoverageDilationRadius : 0.5
+
+    # Grid World
+    kGridWorldXNum : 121
+    kGridWorldYNum : 121
+    kGridWorldZNum : 121
+    kGridWorldCellHeight : 3.0
+    kGridWorldNearbyGridNum : 5
+    # Go2: was 40 / 30 (tunnel.yaml). A viewpoint is only selected if it sees more new surface / frontier points
+    # than this; in a narrow tunnel mouth whose walls were already seen from the cavern no viewpoint qualified, the
+    # deeper tunnel stayed outside the local horizon (UNSEEN, never a global target) and the robot turned back.
+    # Lowered: the robot went 13 m -> 19 m into the cave tunnel.
+    kMinAddPointNumSmall : 15
+    kMinAddPointNumBig : 60
+    kMinAddFrontierPointNum : 10
+    kCellExploringToCoveredThr : 1
+    kCellCoveredToExploringThr: 10
+    kCellExploringToAlmostCoveredThr: 10
+    kCellAlmostCoveredToExploringThr: 20
+    kCellUnknownToExploringThr: 1
+
+    # Visualization
+    kExploringSubspaceMarkerColorGradientAlpha : true
+    kExploringSubspaceMarkerColorMaxAlpha : 0.8
+    kExploringSubspaceMarkerColorR : 0.0
+    kExploringSubspaceMarkerColorG : 1.0
+    kExploringSubspaceMarkerColorB : 0.0
+    kExploringSubspaceMarkerColorA : 1.0
+    kLocalPlanningHorizonMarkerColorR : 0.0
+    kLocalPlanningHorizonMarkerColorG : 1.0
+    kLocalPlanningHorizonMarkerColorB : 0.0
+    kLocalPlanningHorizonMarkerColorA : 1.0
+    kLocalPlanningHorizonMarkerWidth : 0.3
+    kLocalPlanningHorizonHeight : 3.0

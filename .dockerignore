@@ -1,0 +1,4 @@
+# the image only needs the Python wheels and the Ceres install script; everything else is mounted at run time
+*
+!docker/wheels/
+!ros2_ws/src/BIEVR-LIO/docker/scripts/install_ceres.sh

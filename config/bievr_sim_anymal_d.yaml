@@ -1,0 +1,14 @@
+# BIEVR-LIO sensor config for the Isaac Sim ANYmal D (sim/go2_sim.py --robot anymal_d).
+topics:
+  pointcloud: "/lidar/points"
+  imu: "/imu/data"
+
+calibration: # T_IMU_LIDAR (LiDAR -> IMU). IMU = ANYmal base frame; lidar at lidar_pos in config/robots.yaml, no rotation.
+  translation: [0.0, 0.0, 0.25]
+  rotation: [1, 0, 0,
+             0, 1, 0,
+             0, 0, 1]
+
+lidar:
+  min_range_m: 0.5 # Exclude points closer than this range [m]
+  max_range_m: 100

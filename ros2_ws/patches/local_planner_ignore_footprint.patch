@@ -1,0 +1,17 @@
+diff --git a/src/local_planner/src/localPlanner.cpp b/src/local_planner/src/localPlanner.cpp
+index 92ce812..5f12e1c 100644
+--- a/src/local_planner/src/localPlanner.cpp
++++ b/src/local_planner/src/localPlanner.cpp
+@@ -688,7 +688,11 @@ int main(int argc, char** argv)
+         point.intensity = plannerCloud->points[i].intensity;
+ 
+         float dis = sqrt(point.x * point.x + point.y * point.y);
+-        if (dis < adjacentRange && ((point.z > minRelZ && point.z < maxRelZ) || useTerrainAnalysis)) {
++        // isaac_explore (patches/local_planner_ignore_footprint.patch): a legged robot stands on rough ground, and
++        // terrain points under its own body blocked every path (all paths start at the vehicle) -> permanent stop.
++        // Whatever is inside the footprint is under the robot, not something to avoid.
++        bool in_footprint = fabs(point.x) < vehicleLength / 2 && fabs(point.y) < vehicleWidth / 2;
++        if (dis < adjacentRange && !in_footprint && ((point.z > minRelZ && point.z < maxRelZ) || useTerrainAnalysis)) {
+           plannerCloudCrop->push_back(point);
+         }
+       }

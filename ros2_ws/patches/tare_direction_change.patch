@@ -1,0 +1,18 @@
+diff --git a/src/tare_planner/src/sensor_coverage_planner/sensor_coverage_planner_ground.cpp b/src/tare_planner/src/sensor_coverage_planner/sensor_coverage_planner_ground.cpp
+index f3923fb..7b9f8aa 100644
+--- a/src/tare_planner/src/sensor_coverage_planner/sensor_coverage_planner_ground.cpp
++++ b/src/tare_planner/src/sensor_coverage_planner/sensor_coverage_planner_ground.cpp
+@@ -1447,8 +1447,12 @@ void SensorCoveragePlanner3D::CountDirectionChange() {
+       }
+     }
+     moving_direction_ = current_moving_direction_;
++    // isaac_explore (patches/tare_direction_change.patch): only move the reference after 0.5 m of travel. Upstream
++    // reset it every round (a keypose = 5 scans = 0.5 s), so a robot slower than 1 m/s never moved > 0.5 m between
++    // rounds, no reversal was ever counted and momentum never engaged: a legged robot dithered between two
++    // relocation directions for minutes.
++    last_robot_position_ = robot_position_;
+   }
+-  last_robot_position_ = robot_position_;
+ 
+   std_msgs::msg::Int32 momentum_activation_count_msg;
+   momentum_activation_count_msg.data = momentum_activation_count_;

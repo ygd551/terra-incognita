@@ -1,0 +1,22 @@
+# Per-robot values, read by sim/go2_sim.py (--robot), launch/explore.launch.py (robot:=) and sim/gt_odom.py.
+# lidar_pos: lidar mount in the base frame (= BIEVR's imu frame), no rotation. Must equal the translation in
+# config/bievr_sim_<robot>.yaml (BIEVR reads its own file). checkpoint: relative to the project root, downloaded by
+# setup.sh (tools/fetch_assets.py).
+go2:
+  checkpoint: assets/checkpoints/go2_rough.pt   # Isaac-Velocity-Rough-Unitree-Go2-v0
+  lidar_pos: [0.10, 0.0, 0.15]   # ~0.45 m above ground when standing
+  spawn_z: 0.42                  # base height at spawn (0.6 tipped it over on landing)
+  vehicle_length: 0.75           # CMU local planner footprint [m] (Go2 body ~0.70 x 0.31)
+  vehicle_width: 0.4
+  vehicle_height: 0.6            # terrain analysis: points higher above ground are ignored (robot passes under)
+  obstacle_height: 0.15          # local planner: higher above ground = obstacle
+  viewpoint_height: 0.5          # TARE kViewPointHeightFromTerrain, ~ lidar height above ground
+anymal_d:
+  checkpoint: assets/checkpoints/anymal_d_rough.pt   # Isaac-Velocity-Rough-Anymal-D-v0
+  lidar_pos: [0.0, 0.0, 0.25]    # on top of the trunk, ~0.85 m above ground (approximates ANYmal D's top lidar)
+  spawn_z: 0.61                  # Isaac Lab default 0.6; 0.65 toppled it on landing in ~1 of 3 starts
+  vehicle_length: 1.0            # ANYmal D ~0.93 x 0.53 m
+  vehicle_width: 0.6
+  vehicle_height: 1.0            # ~0.9 m with the lidar
+  obstacle_height: 0.2           # rough-terrain policy is trained on steps up to ~0.23 m
+  viewpoint_height: 0.75         # = CMU default

@@ -1,0 +1,14 @@
+# BIEVR-LIO sensor config for the Isaac Sim Go2 (sim/go2_sim.py).
+topics:
+  pointcloud: "/lidar/points"
+  imu: "/imu/data"
+
+calibration: # T_IMU_LIDAR (LiDAR -> IMU). IMU = Go2 base frame; lidar mounted at LIDAR_POS in go2_sim.py, no rotation.
+  translation: [0.10, 0.0, 0.15]
+  rotation: [1, 0, 0,
+             0, 1, 0,
+             0, 0, 1]
+
+lidar:
+  min_range_m: 0.5 # Exclude points closer than this range [m] (robot legs)
+  max_range_m: 100

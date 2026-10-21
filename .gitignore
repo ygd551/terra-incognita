@@ -1,0 +1,18 @@
+# third-party sources: pinned in ros2_ws/src.repos, fetched by ros2_ws/fetch_src.sh
+ros2_ws/src/*/
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+# large / regenerable
+docker/wheels/
+sim/scenes/
+*.pyc
+__pycache__/
+logs/
+# terrain-generator: source pinned in terrain_gen/setup.sh, venv and generated meshes are local
+terrain_gen/terrain-generator/
+terrain_gen/.venv/
+terrain_gen/out/
+# downloaded / built by setup.sh: walking-policy checkpoints, SubT world + Fuel models, Isaac Lab checkout
+assets/
+third_party/

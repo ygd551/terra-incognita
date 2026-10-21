@@ -1,0 +1,81 @@
+diff --git a/src/tare_planner/src/planning_env/planning_env.cpp b/src/tare_planner/src/planning_env/planning_env.cpp
+index 863d26c..0b7225a 100644
+--- a/src/tare_planner/src/planning_env/planning_env.cpp
++++ b/src/tare_planner/src/planning_env/planning_env.cpp
+@@ -170,6 +170,22 @@ void PlanningEnv::UpdateFrontiers()
+   {
+     prev_robot_position_ = robot_position_;
+     rolling_occupancy_grid_->GetFrontier(frontier_cloud_->cloud_, robot_position_, parameters_.kExtractFrontierRange);
++    // isaac_explore debug (patches/tare_debug_frontier.patch): raw frontiers, and the occupancy grid
++    // (intensity 0 = occupied, 1 = free; unknown cells are absent) in a +-0.35 m slice at the robot height
++    frontier_cloud_->Publish();
++    {
++      pcl::PointCloud<pcl::PointXYZI>::Ptr occ(new pcl::PointCloud<pcl::PointXYZI>);
++      rolling_occupancy_grid_->GetVisualizationCloud(occ);
++      rolling_occupancy_grid_cloud_->cloud_->clear();
++      for (const auto& p : occ->points)
++      {
++        if (std::fabs(p.z - robot_position_.z()) <= 0.35)
++        {
++          rolling_occupancy_grid_cloud_->cloud_->points.push_back(p);
++        }
++      }
++      rolling_occupancy_grid_cloud_->Publish();
++    }
+ 
+     if (!frontier_cloud_->cloud_->points.empty())
+     {
+diff --git a/src/tare_planner/src/sensor_coverage_planner/sensor_coverage_planner_ground.cpp b/src/tare_planner/src/sensor_coverage_planner/sensor_coverage_planner_ground.cpp
+index f3923fb..b2132a5 100644
+--- a/src/tare_planner/src/sensor_coverage_planner/sensor_coverage_planner_ground.cpp
++++ b/src/tare_planner/src/sensor_coverage_planner/sensor_coverage_planner_ground.cpp
+@@ -734,8 +734,24 @@ int SensorCoveragePlanner3D::UpdateViewPoints() {
+   // For visualization
+   collision_cloud_->Publish();
+   // collision_grid_cloud_->Publish();
+-  viewpoint_manager_->GetCollisionViewPointVisCloud(
+-      viewpoint_in_collision_cloud_->cloud_);
++  // isaac_explore debug (patches/tare_debug_frontier.patch): every viewpoint of the local horizon, intensity = state
++  // bits 1 collision, 2 line of sight, 4 connected, 8 visited, 16 candidate, 32 has terrain height
++  // (upstream published the candidates here, despite the topic name)
++  viewpoint_in_collision_cloud_->cloud_->clear();
++  for (int i = 0; i < viewpoint_manager_->GetViewPointNum(); i++) {
++    geometry_msgs::msg::Point vp = viewpoint_manager_->GetViewPointPosition(i, true);
++    pcl::PointXYZI p;
++    p.x = vp.x;
++    p.y = vp.y;
++    p.z = vp.z;
++    p.intensity = 1 * viewpoint_manager_->ViewPointInCollision(i, true) +
++                  2 * viewpoint_manager_->ViewPointInLineOfSight(i, true) +
++                  4 * viewpoint_manager_->ViewPointConnected(i, true) +
++                  8 * viewpoint_manager_->ViewPointVisited(i, true) +
++                  16 * viewpoint_manager_->IsViewPointCandidate(i, true) +
++                  32 * viewpoint_manager_->ViewPointHasTerrainHeight(i, true);
++    viewpoint_in_collision_cloud_->cloud_->points.push_back(p);
++  }
+   viewpoint_in_collision_cloud_->Publish();
+ 
+   viewpoint_manager_update_timer.Stop(false);
+@@ -866,6 +882,22 @@ void SensorCoveragePlanner3D::GlobalPlanning(
+ 
+   viewpoint_manager_->UpdateCandidateViewPointCellStatus(grid_world_);
+ 
++  // isaac_explore debug (patches/tare_debug_frontier.patch): every subspace that is not UNSEEN, intensity = status
++  // (1 EXPLORING, 2 COVERED, 3 COVERED_BY_OTHERS, 4 NOGO)
++  exploring_cell_vis_cloud_->cloud_->clear();
++  for (int i = 0; grid_world_->IndInBound(i); i++) {
++    grid_world_ns::CellStatus s = grid_world_->GetCellStatus(i);
++    if (s == grid_world_ns::CellStatus::UNSEEN) continue;
++    geometry_msgs::msg::Point c = grid_world_->GetCellPosition(i);
++    pcl::PointXYZI p;
++    p.x = c.x;
++    p.y = c.y;
++    p.z = c.z;
++    p.intensity = static_cast<int>(s);
++    exploring_cell_vis_cloud_->cloud_->points.push_back(p);
++  }
++  exploring_cell_vis_cloud_->Publish();
++
+   global_path = grid_world_->SolveGlobalTSP(
+       viewpoint_manager_, global_cell_tsp_order, keypose_graph_);
+ 

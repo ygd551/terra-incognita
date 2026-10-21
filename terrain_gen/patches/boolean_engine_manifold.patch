@@ -1,0 +1,26 @@
+diff --git a/terrain_generator/utils/mesh_utils.py b/terrain_generator/utils/mesh_utils.py
+index d3fff90..2a01a96 100644
+--- a/terrain_generator/utils/mesh_utils.py
++++ b/terrain_generator/utils/mesh_utils.py
+@@ -20,7 +20,7 @@ from trimesh.exchange import xyz
+ 
+ 
+ def merge_meshes(
+-    meshes: List[trimesh.Trimesh], minimal_triangles: bool = False, engine: str = "blender"
++    meshes: List[trimesh.Trimesh], minimal_triangles: bool = False, engine: str = "manifold"
+ ) -> trimesh.Trimesh:
+     if minimal_triangles:
+         mesh = trimesh.boolean.union(meshes, engine=engine)
+diff --git a/terrain_generator/utils/utils.py b/terrain_generator/utils/utils.py
+index 41e524a..7cdbc20 100644
+--- a/terrain_generator/utils/utils.py
++++ b/terrain_generator/utils/utils.py
+@@ -15,7 +15,7 @@ import json
+ from scipy.spatial.transform import Rotation
+ 
+ 
+-ENGINE = "blender"
++ENGINE = "manifold"  # isaac_explore: no blender on this host; trimesh>=4 ships the manifold3d backend
+ # Cache dir is in the above directory as this file.
+ # CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "__cache__/mesh_cache")
+ CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "__cache__")

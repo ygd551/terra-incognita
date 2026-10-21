@@ -1,0 +1,21 @@
+repositories:
+  autonomous_exploration_development_environment:
+    type: git
+    url: https://github.com/HongbiaoZ/autonomous_exploration_development_environment.git
+    version: 158e67b31b644ed1e8b06eb1d7f70e183cc62591
+  BIEVR-LIO:
+    type: git
+    url: https://github.com/ethz-asl/BIEVR-LIO.git
+    version: 2306022e341e98ce84244f92ba7d26f047b41dbc
+  elevation_mapping_cupy:
+    type: git
+    url: https://github.com/leggedrobotics/elevation_mapping_cupy.git
+    version: d9e1c9fe42ea3d463519333a443da99f680adde8
+  ros2_numpy:
+    type: git
+    url: https://github.com/Box-Robotics/ros2_numpy.git
+    version: d665add22e6a9070e88d9514bbf0dcbcb122a3dc
+  tare_planner:
+    type: git
+    url: https://github.com/caochao39/tare_planner.git
+    version: b6760adb4280b379567c76f4e684ce628e28ef71

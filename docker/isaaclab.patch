@@ -1,0 +1,49 @@
+diff --git a/docker/Dockerfile.base b/docker/Dockerfile.base
+index 2c9b953..53480e1 100644
+--- a/docker/Dockerfile.base
++++ b/docker/Dockerfile.base
+@@ -84,6 +84,12 @@ RUN touch /bin/nvidia-smi && \
+     touch /var/run/nvidia-persistenced/socket
+ 
+ # installing Isaac Lab dependencies
++# pin drifted deps (torch/setuptools); PIP_CONSTRAINT also reaches pip's isolated build envs
++ENV PIP_CONSTRAINT=${ISAACLAB_PATH}/docker/pip-constraints.txt
++# slow/flaky link: pip>=25.1 can resume interrupted downloads instead of failing the whole build
++ENV PIP_DEFAULT_TIMEOUT=120 PIP_RETRIES=10 PIP_RESUME_RETRIES=50
++RUN --mount=type=cache,target=${DOCKER_USER_HOME}/.cache/pip \
++    ${ISAACLAB_PATH}/isaaclab.sh -p -m pip install "pip>=25.1,<26"
+ # use pip caching to avoid reinstalling large packages
+ RUN --mount=type=cache,target=${DOCKER_USER_HOME}/.cache/pip \
+     ${ISAACLAB_PATH}/isaaclab.sh --install
+diff --git a/docker/docker-compose.yaml b/docker/docker-compose.yaml
+index 2333049..42d359a 100644
+--- a/docker/docker-compose.yaml
++++ b/docker/docker-compose.yaml
+@@ -84,6 +84,7 @@ services:
+     env_file: .env.base
+     build:
+       context: ../
++      network: host
+       dockerfile: docker/Dockerfile.base
+       args:
+         - ISAACSIM_BASE_IMAGE_ARG=${ISAACSIM_BASE_IMAGE}
+@@ -111,6 +112,7 @@ services:
+       - .env.ros2
+     build:
+       context: ../
++      network: host
+       dockerfile: docker/Dockerfile.ros2
+       args:
+         # ROS2_APT_PACKAGE will default to NONE. This is to
+diff --git a/docker/pip-constraints.txt b/docker/pip-constraints.txt
+new file mode 100644
+index 0000000..fe7a3ac
+--- /dev/null
++++ b/docker/pip-constraints.txt
+@@ -0,0 +1,6 @@
++# Pin versions that drifted since the v2.1.1 release (see build failure 2026-10-02):
++# torch 2.14 (cu130) needs driver >= 580; we are on 550.
++torch==2.7.0
++torchvision==0.22.0
++# setuptools >= 81 removed pkg_resources, which flatdict==4.0.1's setup.py imports (applies to isolated build envs too)
++setuptools<81
