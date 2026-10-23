@@ -10,6 +10,7 @@ meshes are referenced at their composed SDF pose; collision meshes become static
 """
 import argparse
 import asyncio
+import glob
 import math
 import os
 import re
@@ -51,13 +52,18 @@ def pose_to_matrix(text):
 
 
 def find_model_dir(uri):
-    """Fuel URI -> newest cached version dir, e.g. /fuel/fuel.ignitionrobotics.org/openrobotics/models/<name>/<ver>."""
+    """Fuel URI -> newest cached version dir, e.g. /fuel/fuel.ignitionrobotics.org/openrobotics/models/<name>/<ver>.
+    model://<name> (a Gazebo-classic local model) -> a model of that name under any host / owner of the cache, e.g.
+    the gbplanner mine scans copied to <fuel>/local/gbplanner/models/<name>/1."""
     m = re.search(r"https?://([^/]+)/[^/]+/([^/]+)/models/([^/]+)", uri)
-    if not m:
+    if m:
+        cands = [os.path.join(args.fuel, host, m.group(2).lower(), "models", m.group(3).lower())
+                 for host in (m.group(1), "fuel.ignitionrobotics.org", "fuel.gazebosim.org")]
+    elif uri.startswith("model://"):
+        cands = glob.glob(os.path.join(args.fuel, "*", "*", "models", uri[8:].split("/")[0].lower()))
+    else:
         return None
-    owner, name = m.group(2).lower(), m.group(3).lower()
-    for host in (m.group(1), "fuel.ignitionrobotics.org", "fuel.gazebosim.org"):
-        d = os.path.join(args.fuel, host, owner, "models", name)
+    for d in cands:
         if os.path.isdir(d):
             vers = sorted((v for v in os.listdir(d) if v.isdigit()), key=int)
             if vers:
@@ -158,10 +164,24 @@ def merge_colliders(stage, roots, path):
 
 
 def add_box(stage, path, size, xform):
+    """Box collider. Floor slabs (flatter than wide, centred <= 1 m up: the 1 mm floors of the tunnel tiles, the 25 m
+    pads of the tunnel / NIOSH staging areas) become an invisible box mesh that merge_colliders bakes into the one
+    collider the height scanner and the lidar ray-cast: as a separate Cube the robot stood on it but its height scan saw
+    a cliff and it toppled. Other boxes (the invisible enclosure walls and roof of the staging areas) stay physics-only
+    Cubes, so the lidar does not see walls that are not drawn."""
+    T = Gf.Matrix4d().SetScale(Gf.Vec3d(*size)) * xform
+    if size[2] < min(size[0], size[1]) and xform.ExtractTranslation()[2] <= 1.0:
+        mesh = UsdGeom.Mesh.Define(stage, path)
+        mesh.CreatePointsAttr(Vt.Vec3fArray([Gf.Vec3f(x, y, z) for x in (-.5, .5) for y in (-.5, .5) for z in (-.5, .5)]))
+        mesh.CreateFaceVertexCountsAttr([4] * 6)   # corner i = 4x + 2y + z (bits)
+        mesh.CreateFaceVertexIndicesAttr([0, 1, 3, 2, 4, 6, 7, 5, 0, 4, 5, 1, 2, 3, 7, 6, 0, 2, 6, 4, 1, 5, 7, 3])
+        mesh.AddTransformOp().Set(T)
+        mesh.MakeInvisible()
+        collide_roots.append(mesh.GetPrim())
+        return
     cube = UsdGeom.Cube.Define(stage, path)
     cube.CreateSizeAttr(1.0)
-    xf = cube.AddTransformOp()
-    xf.Set(Gf.Matrix4d().SetScale(Gf.Vec3d(*size)) * xform)
+    cube.AddTransformOp().Set(T)
     cube.MakeInvisible()
     UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
 
@@ -194,7 +214,8 @@ for inc in ET.parse(args.world).getroot().iter("include"):
     if mdir is None:
         print(f"[WARN] not in fuel cache: {uri}", flush=True)
         continue
-    model = ET.parse(os.path.join(mdir, "model.sdf")).getroot().find("model")
+    # lstrip: some Fuel models (Phone, Valve, Backpack, ...) start with a blank line before <?xml>, which ET rejects
+    model = ET.fromstring(open(os.path.join(mdir, "model.sdf"), encoding="utf-8").read().lstrip()).find("model")
     T_model = pose_to_matrix(inc.findtext("pose"))
     base = f"/World/{safe(name)}"
     stage.DefinePrim(base, "Xform")

@@ -1,0 +1,7 @@
+# ros1_bridge parameter_bridge topics (loaded into the ROS 1 parameter server; type = the ROS 2 type name). Only what GBPlanner needs crosses:
+# TF does not (isaac_adapter.py publishes the ROS 1 TF tree itself).
+topics:
+  - {topic: /clock, type: rosgraph_msgs/msg/Clock, queue_size: 1}                           # ROS 2 -> ROS 1
+  - {topic: /bievr_lio/odom, type: nav_msgs/msg/Odometry, queue_size: 10}                    # ROS 2 -> ROS 1
+  - {topic: /bievr_lio/points/registered, type: sensor_msgs/msg/PointCloud2, queue_size: 2}  # ROS 2 -> ROS 1
+  - {topic: /way_point, type: geometry_msgs/msg/PointStamped, queue_size: 2}                 # ROS 1 -> ROS 2

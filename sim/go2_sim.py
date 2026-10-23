@@ -26,11 +26,15 @@ import time
 from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-parser.add_argument("--scene", default="/workspace/isaac_explore/sim/scenes/simple_cave_01.usd")
+parser.add_argument("--scene", default="simple_cave_01",
+                    help="scene name (sim/scenes/NAME.usd; start pose defaults in config/scenes.yaml) or a .usd path")
 parser.add_argument("--robot", choices=["go2", "anymal_d"], default="go2")
 parser.add_argument("--checkpoint", default=None, help="policy (default: checkpoint in config/robots.yaml)")
-parser.add_argument("--spawn", type=float, nargs=3, default=None,
-                    help="x y z in the scene [m] (default: 2 0 spawn_z from config/robots.yaml)")
+parser.add_argument("--spawn", type=float, nargs="+", default=None, metavar="X Y [Z]",
+                    help="start position [m]; without Z the robot stands on the floor below (x, y) "
+                         "(default: the scene's spawn in config/scenes.yaml, else 2 0)")
+parser.add_argument("--yaw", type=float, default=None, metavar="DEG",
+                    help="start heading [deg] (default: the scene's yaw in config/scenes.yaml, else 0)")
 parser.add_argument("--no_realtime", action="store_true", help="run as fast as possible instead of wall-clock pace")
 parser.add_argument("--see_through", type=float, default=0.0, metavar="OPACITY",
                     help="draw the scene semi-transparent (0.25 works well) and let the GUI camera follow the robot, to watch it "
@@ -83,19 +87,52 @@ ROBOT = yaml.safe_load(open("/workspace/isaac_explore/config/robots.yaml"))[args
 # Lidar mount on the base link (= the imu frame), no rotation. BIEVR reads it from config/bievr_sim_<robot>.yaml.
 LIDAR_POS = tuple(ROBOT["lidar_pos"])
 CHECKPOINT = args.checkpoint or os.path.join("/workspace/isaac_explore", ROBOT["checkpoint"])
-SPAWN = tuple(args.spawn) if args.spawn else (2.0, 0.0, ROBOT["spawn_z"])
+SCENE_USD = args.scene if args.scene.endswith(".usd") else f"/workspace/isaac_explore/sim/scenes/{args.scene}.usd"
+SCENE_NAME = os.path.splitext(os.path.basename(SCENE_USD))[0]
+SCENE = (yaml.safe_load(open("/workspace/isaac_explore/config/scenes.yaml")) or {}).get(SCENE_NAME, {})
+
+
+def floor_z(usd, x, y, z_ref):
+    """Height of the scene collider at (x, y): of the surfaces above / below that point, the one closest to z_ref
+    (not the highest: caves have a roof). The collider is one triangle mesh in world coordinates (sdf_to_usd.py)."""
+    from pxr import Usd, UsdGeom
+    stage = Usd.Stage.Open(usd)   # keep a reference: a temporary stage is freed and its prims turn invalid
+    mesh = UsdGeom.Mesh(stage.GetPrimAtPath("/World/collision"))
+    p = np.array(mesh.GetPointsAttr().Get(), float)
+    a, b, c = (p[i] for i in np.array(mesh.GetFaceVertexIndicesAttr().Get()).reshape(-1, 3).T)
+    e1, e2, q = b[:, :2] - a[:, :2], c[:, :2] - a[:, :2], np.array([x, y]) - a[:, :2]
+    den = e1[:, 0] * e2[:, 1] - e2[:, 0] * e1[:, 1]
+    den = np.where(np.abs(den) > 1e-12, den, np.nan)   # vertical triangles have no xy area
+    u = (q[:, 0] * e2[:, 1] - e2[:, 0] * q[:, 1]) / den   # barycentric coordinates in the xy projection
+    v = (e1[:, 0] * q[:, 1] - q[:, 0] * e1[:, 1]) / den
+    hit = (u >= 0) & (v >= 0) & (u + v <= 1)
+    z = (a[:, 2] + u * (b[:, 2] - a[:, 2]) + v * (c[:, 2] - a[:, 2]))[hit]
+    return float(z[np.argmin(np.abs(z - z_ref))]) if len(z) else z_ref
+
+
+_x, _y, _zref = (list(SCENE.get("spawn", [2.0, 0.0])) + [0.0])[:3]
+if args.spawn:
+    _x, _y = args.spawn[:2]
+SPAWN = (tuple(args.spawn[:3]) if args.spawn and len(args.spawn) >= 3 else
+         (_x, _y, floor_z(SCENE_USD, _x, _y, _zref) + ROBOT["spawn_z"]))
+YAW = math.radians(args.yaw if args.yaw is not None else SCENE.get("yaw", 0.0))
 # |vx|, |vy|, |wz|. Trained range is +-1, but pure in-place turns at 1 rad/s make the pretrained policy stumble
 # (IMU spikes of 160 m/s^2, falls); 0.6 rad/s is calm.
 CMD_LIMITS = np.array([1.0, 1.0, 0.6])
 # Slew limits on the command fed to the policy [m/s^2, m/s^2, rad/s^2]. The policy was trained with commands that
 # change every 10 s; the planner can flip wz between +1 and -1 from one message to the next, which tipped it over.
 CMD_SLEW = np.array([1.0, 1.0, 2.0])
-# Stuck recovery: asked to go forward (> STUCK_CMD) for STUCK_TIME s while really moving < STUCK_VEL -> back up, then turn.
-# ponytail: uses the sim's true body velocity and a fixed manoeuvre; on a real robot use odometry and let the
+# Stuck recovery: asked to go forward (> STUCK_CMD) for STUCK_TIME s while the body moved < STUCK_DIST and turned
+# < STUCK_YAW -> back up, then turn. Displacement since the command started, not the instantaneous velocity: a robot
+# wedged between rocks scrabbles (velocity spikes reset a velocity timer) without going anywhere (seen at (130, -2)).
+# ponytail: uses the sim's true pose and a fixed manoeuvre; on a real robot use odometry and let the
 # planner pick the escape direction.
 # STUCK_CMD must stay below SPIN_CREEP: an arc turn that creeps into a rock (not collision-checked) must count as
 # stuck, otherwise the robot scrabbles on the rock until BIEVR diverges (seen at the cave tunnel mouth).
-STUCK_CMD, STUCK_VEL, STUCK_TIME = 0.1, 0.05, 4.0
+STUCK_CMD, STUCK_DIST, STUCK_YAW, STUCK_TIME = 0.1, 0.2, math.radians(15.0), 4.0
+# Fallen: tilted > 60 deg, or > TILT_DEG for TILT_TIME s (wedged on its side among rocks: the policy cannot get it
+# up, and the stuck manoeuvre does not either) -> stop commands; --auto_reset stands it up.
+TILT_DEG, TILT_TIME = 35.0, 5.0
 RECOVERY = [(1.5, (-0.3, 0.0, 0.0)), (1.5, (0.0, 0.0, 0.6))]  # (seconds, command) steps
 # Planner stall: the CMU local planner found no free path (it then publishes a 1-pose /path and zero speed) for
 # PLANNER_STALL_TIME s while the way point is still > 1.5 m away -> same RECOVERY manoeuvre. The stuck check above
@@ -116,7 +153,7 @@ LIDAR_HZ, LIDAR_CH, LIDAR_COLS, LIDAR_VFOV = 10, 32, 1024, (-22.5, 22.5)  # Oust
 # ---------------- environment ----------------
 cfg = EnvCfg()
 cfg.scene.num_envs = 1
-cfg.scene.terrain = TerrainImporterCfg(prim_path="/World/ground", terrain_type="usd", usd_path=args.scene)
+cfg.scene.terrain = TerrainImporterCfg(prim_path="/World/ground", terrain_type="usd", usd_path=SCENE_USD)
 cfg.scene.height_scanner.mesh_prim_paths = [SCENE_MESH]  # RayCaster supports exactly one mesh
 # Training casts the height scan from 20 m above the base; under a cave roof those rays hit the rock's top surface
 # and the policy sees a 16 m wall (it froze and tipped over at the cave mouth). The observation is
@@ -130,6 +167,9 @@ cfg.scene.lidar = RayCasterCfg(
     pattern_cfg=patterns.LidarPatternCfg(channels=LIDAR_CH, vertical_fov_range=LIDAR_VFOV,
                                          horizontal_fov_range=(-180.0, 180.0), horizontal_res=360.0 / LIDAR_COLS))
 cfg.scene.robot.init_state.pos = SPAWN
+cfg.scene.robot.init_state.rot = (math.cos(YAW / 2), 0.0, 0.0, math.sin(YAW / 2))   # w x y z
+print(f"[go2_sim] scene {SCENE_NAME}: start at ({SPAWN[0]:.1f}, {SPAWN[1]:.1f}, {SPAWN[2]:.2f}) heading "
+      f"{math.degrees(YAW):.0f} deg", flush=True)
 # Never let PhysX put the robot to sleep: after standing still for a while it fell asleep, and the policy's joint
 # targets (written through the tensor API) did not wake it - the Go2 froze in place and ignored every command.
 cfg.scene.robot.spawn.articulation_props.sleep_threshold = 0.0
@@ -319,7 +359,8 @@ wall0, sim0 = time.time(), env.sim.current_time
 print(f"[go2_sim] running: robot={args.robot} scene={args.scene}. Drive with /cmd_vel.", flush=True)
 fallen = False
 falls, fallen_at = 0, float("inf")  # fall counter (printed), sim time of the current fall
-stuck_t = 0.0  # how long we have been commanded forward without moving
+stuck_anchor = None  # (xy, yaw, sim time) where the current forward command started to make no headway
+tilt_t = 0.0  # how long the robot has been tilted more than TILT_DEG
 stall_t = 0.0  # how long the local planner has had no free path
 recovery = []  # remaining (seconds, command) steps of an active recovery manoeuvre
 while app.is_running():
@@ -330,13 +371,15 @@ while app.is_running():
         cmd[:] = 0.0
         cmd_applied[:] = 0.0
     up_z = env.scene["robot"].data.projected_gravity_b[0, 2].item()  # -1 upright, +1 upside down
-    if (up_z > -0.5) != fallen:
+    tilt_t = tilt_t + env.step_dt if up_z > -math.cos(math.radians(TILT_DEG)) else 0.0
+    if (up_z > -0.5 or tilt_t > TILT_TIME) != fallen:
         fallen = not fallen
         if fallen:
             cmd[:] = 0.0  # stop driving a robot that is lying on its back
             falls += 1
             fallen_at = env.sim.current_time
-            print(f"[go2_sim] robot has fallen (fall #{falls} at t={fallen_at:.1f} s). Stand it up with:  ros2 topic pub "
+            print(f"[go2_sim] robot has fallen (fall #{falls} at t={fallen_at:.1f} s, tilted "
+                  f"{math.degrees(math.acos(max(-1.0, min(1.0, -up_z)))):.0f} deg). Stand it up with:  ros2 topic pub "
                   "--once /sim/reset std_msgs/msg/String \"{data: here}\"   (or data: spawn)", flush=True)
     if fallen:
         cmd[:] = 0.0
@@ -350,11 +393,21 @@ while app.is_running():
     if not recovery and cmd[0] > TURN_VX:
         f = min(max((abs(cmd[2]) - TURN_WZ[0]) / (TURN_WZ[1] - TURN_WZ[0]), 0.0), 1.0)  # 0 straight .. 1 tight turn
         cmd[0] = min(cmd[0], CMD_LIMITS[0] - f * (CMD_LIMITS[0] - TURN_VX))
-    v_body = env.scene["robot"].data.root_lin_vel_b[0, 0].item()
-    stuck_t = stuck_t + env.step_dt if (cmd[0] > STUCK_CMD and abs(v_body) < STUCK_VEL and not recovery) else 0.0
-    if stuck_t > STUCK_TIME and not fallen:
-        print(f"[go2_sim] stuck (commanded {cmd[0]:.2f} m/s, moving {v_body:.2f} m/s): backing up and turning", flush=True)
-        recovery, stuck_t = [list(step) for step in RECOVERY], 0.0
+    rd = env.scene["robot"].data
+    xy = rd.root_pos_w[0, :2].tolist()
+    qw, qx, qy, qz = rd.root_quat_w[0].tolist()
+    yaw = math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz))
+    if cmd[0] > STUCK_CMD and not recovery and not fallen:
+        moved = stuck_anchor and (math.dist(xy, stuck_anchor[0]) > STUCK_DIST or
+                                  abs((yaw - stuck_anchor[1] + math.pi) % (2 * math.pi) - math.pi) > STUCK_YAW)
+        if stuck_anchor is None or moved:
+            stuck_anchor = (xy, yaw, env.sim.current_time)
+        elif env.sim.current_time - stuck_anchor[2] > STUCK_TIME:
+            print(f"[go2_sim] stuck (commanded {cmd[0]:.2f} m/s, {cmd[2]:.2f} rad/s; moved < {STUCK_DIST} m and "
+                  f"< {math.degrees(STUCK_YAW):.0f} deg in {STUCK_TIME:.0f} s): backing up and turning", flush=True)
+            recovery, stuck_anchor = [list(step) for step in RECOVERY], None
+    else:
+        stuck_anchor = None
     stalled = (plan.get("n", 2) <= 1 and "wp" in plan and "pos" in plan and not recovery and not fallen
                and math.dist(plan["wp"], plan["pos"]) > PLANNER_STALL_DIST)
     stall_t = stall_t + env.step_dt if stalled else 0.0

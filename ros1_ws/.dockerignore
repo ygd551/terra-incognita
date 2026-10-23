@@ -1,0 +1,4 @@
+# the image only needs the package.xml files of the sources (for rosdep)
+*
+!src/
+src/**/.git/

@@ -16,7 +16,7 @@ MEM=${ISAAC_EXPLORE_MEM:-$(awk '/MemTotal/ {m = int($2 / 1048576) - 9; print (m 
 start() {
   xhost +si:localuser:root >/dev/null 2>&1 || true   # GUI windows (Isaac Sim, RViz); X forgets it on every restart
   local src
-  src=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/isaac_explore"}}{{.Source}}{{end}}{{end}}' $NAME 2>/dev/null)
+  src=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/isaac_explore"}}{{.Source}}{{end}}{{end}}' $NAME 2>/dev/null || true)   # none yet: empty
   if [ -n "$src" ] && [ "$src" != "$ROOT" ]; then   # another checkout of the project owns the container
     echo "container $NAME was started from $src: recreating it for $ROOT" >&2
     docker rm -f $NAME >/dev/null

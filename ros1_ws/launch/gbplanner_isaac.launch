@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<!-- GBPlanner2 + pci_general for the isaac_explore stack (ROS 1 side). Mirrors gbplanner/launch/smb/smb_sim.launch
+     without its Gazebo simulation and path tracker: scripts/isaac_adapter.py is the path follower. -->
+<launch>
+  <arg name="config" default="/ws/config"/>
+  <arg name="rviz" default="true"/>
+  <param name="use_sim_time" value="true"/>   <!-- /clock comes from the Isaac sim through ros1_bridge -->
+
+  <node pkg="gbplanner" type="gbplanner_node" name="gbplanner_node" output="screen" launch-prefix="stdbuf -oL -eL">
+    <remap from="odometry" to="/bievr_lio/odom"/>
+    <remap from="/pointcloud" to="/gbplanner/input_pointcloud"/>
+    <rosparam command="load" file="$(arg config)/gbplanner_config.yaml"/>
+    <rosparam command="load" file="$(arg config)/voxblox_config.yaml"/>
+  </node>
+
+  <node pkg="pci_general" type="pci_general_ros_node" name="pci_general_ros_node" output="screen">
+    <remap from="planner_server" to="gbplanner"/>
+    <remap from="planner_homing_server" to="gbplanner/homing"/>
+    <remap from="odometry" to="/bievr_lio/odom"/>
+    <rosparam command="load" file="$(arg config)/pci_config.yaml"/>
+  </node>
+
+  <!-- no D-Bus session in the container: without this, RViz's Qt aborts at start-up (libdbus, core dump) -->
+  <node if="$(arg rviz)" pkg="rviz" type="rviz" name="gbplanner_rviz"
+        args="-d $(arg config)/gbplanner.rviz">
+    <env name="DBUS_SESSION_BUS_ADDRESS" value="disabled:"/>
+  </node>
+</launch>

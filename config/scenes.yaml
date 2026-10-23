@@ -1,0 +1,42 @@
+# Start pose per scene (sim.sh --scene NAME, i.e. sim/scenes/NAME.usd): spawn [x, y, z_ref], yaw [deg].
+# go2_sim.py puts the robot on the collider surface at (x, y) closest to z_ref (a cave has a roof above the floor) and
+# --spawn / --yaw override. SubT worlds (tools/fetch_assets.py + sim/sdf_to_usd.py): the competition's staging area,
+# 8 m before the artifact origin (the course entrance), facing the course.
+cave_circuit_practice_01: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+cave_circuit_practice_02: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+cave_circuit_practice_03: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+cave_qual: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+finals_practice_01: {spawn: [-18.5, 0.0, 0.0], yaw: 0}
+finals_practice_02: {spawn: [-18.5, 0.0, 0.0], yaw: 0}
+finals_practice_03: {spawn: [-18.5, 0.0, 0.0], yaw: 0}
+finals_qual: {spawn: [-18.5, 0.0, 0.0], yaw: 0}
+niosh_ex_config_a: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+niosh_ex_config_b: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+niosh_sr_config_a: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+niosh_sr_config_b: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+simple_cave_01: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+simple_cave_02: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+simple_cave_03: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+simple_tunnel_01: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+simple_tunnel_02: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+simple_tunnel_03: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+simple_urban_01: {spawn: [9.5, 27.0, 7.5], yaw: 0}
+simple_urban_02: {spawn: [9.5, 27.0, 7.5], yaw: 0}
+simple_urban_03: {spawn: [9.5, 27.0, 7.5], yaw: 0}
+tunnel_circuit_practice_01: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+tunnel_circuit_practice_02: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+tunnel_circuit_practice_03: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+tunnel_qual_ign: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+urban_circuit_practice_01: {spawn: [9.5, 27.0, 7.5], yaw: 0}
+urban_circuit_practice_02: {spawn: [9.5, 27.0, 7.5], yaw: 0}
+urban_circuit_practice_03: {spawn: [9.5, 27.0, 7.5], yaw: 0}
+# ntnu-arl/gbplanner_ros sample worlds (ros1_ws/add_gbp_scenes.sh): the tile caves
+# like SubT; the mine scans at the origin, where gbplanner's own simulation starts (floor found with tools/scene_spawn.py)
+gbp_darpa_cave_01: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+gbp_darpa_cave_02: {spawn: [2.0, 0.0, 0.0], yaw: 0}
+gbp_edgar_mine: {spawn: [0.0, 0.0, 0.2], yaw: 0}
+gbp_pittsburgh_mine: {spawn: [0.0, 0.0, 0.2], yaw: 0}
+gbp_virginia_mine: {spawn: [0.0, 0.0, -0.3], yaw: 0}
+gbp_urban_cave_transition: {spawn: [0.0, 0.0, 1.2], yaw: 0}   # the tile's west end (it spans x -5..35)
+# procedurally generated (terrain_gen/, sim/mesh_to_usd.py)
+tg_indoor_5: {spawn: [0.0, 0.0, -0.9], yaw: 0}

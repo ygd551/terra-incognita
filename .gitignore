@@ -3,6 +3,13 @@ ros2_ws/src/*/
 ros2_ws/build/
 ros2_ws/install/
 ros2_ws/log/
+# ROS 1 workspace (GBPlanner2): sources pinned in ros1_ws/src.repos, fetched by ros1_ws/fetch_src.sh; catkin output
+ros1_ws/src/
+ros1_ws/build/
+ros1_ws/devel/
+ros1_ws/logs/
+ros1_ws/.catkin_tools/
+ros1_ws/scenes/
 # large / regenerable
 docker/wheels/
 sim/scenes/

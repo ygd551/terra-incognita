@@ -1,0 +1,55 @@
+diff --git a/gbplanner/src/rrg.cpp b/gbplanner/src/rrg.cpp
+index 208c4c1..e42f208 100644
+--- a/gbplanner/src/rrg.cpp
++++ b/gbplanner/src/rrg.cpp
+@@ -5063,6 +5063,10 @@ std::vector<geometry_msgs::Pose> Rrg::runGlobalPlanner(int vertex_id,
+       frontier_to_home_distance =
+           global_graph_->getShortestDistance(f->id, global_graph_rep_);
+ 
++      // isaac_explore (upstream crash): skip frontiers the robot cannot reach (isolated in the global graph). With
++      // only such frontiers left, the best gain was 0, one was "found" anyway, and its empty path crashed below
++      if (current_to_frontier_path_id.empty()) continue;
++
+       // Duplication from above but easier to understand.
+       double time_to_target =
+           current_to_frontier_distance / planning_params_.v_homing_max;
+@@ -5136,6 +5140,13 @@ std::vector<geometry_msgs::Pose> Rrg::runGlobalPlanner(int vertex_id,
+     return ret_path;
+   }
+ 
++  // isaac_explore (upstream crash): no path to the frontier (e.g. the one asked for in manual mode is isolated): the
++  // size_t loop below would wrap around and crash. Give the repositioning up, the next round explores locally again
++  if (ret_path.empty()) {
++    global_exploration_ongoing_ = false;
++    return ret_path;
++  }
++
+   // Set the heading angle tangent with the moving direction,
+   // from the second waypoint; the first waypoint keeps the same direction.
+   if (planning_params_.yaw_tangent_correction) {
+diff --git a/planner_common/include/planner_common/params.h b/planner_common/include/planner_common/params.h
+index f274a62..9b5a315 100644
+--- a/planner_common/include/planner_common/params.h
++++ b/planner_common/include/planner_common/params.h
+@@ -21,7 +21,7 @@ typedef ros::Time TIMER;
+ 
+ enum Verbosity { SILENT = 0, PLANNER_STATUS = 1, ERROR = 2, WARN = 3, INFO = 4, DEBUG = 5 };
+ 
+-#define global_verbosity Verbosity::ERROR
++#define global_verbosity Verbosity::WARN
+ #define param_verbosity Verbosity::SILENT
+ 
+ #define ROSPARAM_ERROR(param_name)                                         \
+diff --git a/planner_control_interface/include/planner_control_interface/pci_manager.h b/planner_control_interface/include/planner_control_interface/pci_manager.h
+index a392ff6..a8ff7a4 100644
+--- a/planner_control_interface/include/planner_control_interface/pci_manager.h
++++ b/planner_control_interface/include/planner_control_interface/pci_manager.h
+@@ -9,7 +9,7 @@ namespace explorer {
+ 
+ enum Verbosity { SILENT = 0, PLANNER_STATUS = 1, ERROR = 2, WARN = 3, INFO = 4, DEBUG = 5 };
+ 
+-#define global_verbosity Verbosity::ERROR
++#define global_verbosity Verbosity::WARN
+ #define param_verbosity Verbosity::SILENT
+ class PCIManager {
+  public:

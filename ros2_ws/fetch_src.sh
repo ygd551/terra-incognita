@@ -24,7 +24,7 @@ done
 # required source patches (patches/*debug* are optional diagnostics, apply by hand:
 #   git -C src/tare_planner apply ../../patches/tare_debug_frontier.patch)
 for pair in local_planner_ignore_footprint:autonomous_exploration_development_environment \
-            tare_direction_change:tare_planner; do
+            tare_direction_change:tare_planner tare_rviz_trajectory:tare_planner; do
   P=patches/${pair%%:*}.patch; A=src/${pair##*:}
   if git -C $A apply --check ../../$P 2>/dev/null; then git -C $A apply ../../$P && echo "patch $P"; else echo "keep  $P (already applied)"; fi
 done
