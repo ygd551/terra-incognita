@@ -11,12 +11,16 @@ if [ -f $LOCK ] && kill -0 "$(cat $LOCK)" 2>/dev/null; then
 fi
 echo $$ > $LOCK; trap 'rm -f $LOCK' EXIT
 NAME=$1; MAX=${2:-1200}; shift; shift || true
-ROBOT=anymal_d   # same default as sim.sh; the stack must be started for the simulated robot
-for ((i = 1; i <= $#; i++)); do [ "${!i}" = --robot ] && { j=$((i + 1)); ROBOT=${!j}; }; done
+ROBOT=anymal_d; LIDAR=os1_32   # same defaults as sim.sh; the stack must be started for the simulated robot
+for ((i = 1; i <= $#; i++)); do j=$((i + 1))
+  [ "${!i}" = --robot ] && ROBOT=${!j}
+  [ "${!i}" = --lidar ] && LIDAR=${!j}
+done
 [[ " $* " == *" --robot "* ]] || set -- --robot $ROBOT "$@"
 LAUNCH_ARGS="robot:=$ROBOT ${LAUNCH_ARGS:-}"
 cd "$(dirname "$0")" && ./container.sh start && ./stop_all.sh >/dev/null
 OUT=logs/trial_$NAME; mkdir -p "$OUT"; C="docker exec isaac_explore"; IN=/isaac_explore/$OUT
+echo "$ROBOT" > logs/.robot; echo "$LIDAR" > logs/.lidar   # as sim.sh: read by ros1_ws/gbplanner.sh
 docker exec -d isaac_explore bash -c "source /opt/ros/humble/setup.bash; cd /workspace/isaaclab; PYTHONUNBUFFERED=1 \
   ./isaaclab.sh -p /workspace/isaac_explore/sim/go2_sim.py --headless $* > /tmp/go2_sim.log 2>&1"
 for i in $(seq 60); do sleep 5; $C grep -aqE "\[go2_sim\] running|Traceback" /tmp/go2_sim.log && break; done

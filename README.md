@@ -19,7 +19,7 @@
 
 - **Scenes**: the DARPA SubT cave `simple_cave_01` (installed by `setup.sh`), and one command away 33 more: the other SubT caves, mine tunnels, NIOSH mine replicas, finals and urban worlds, real mine scans, procedurally generated confined terrain (see [More scenes](#more-scenes)).
 - **Robots**: ANYmal D (default) and Unitree Go2, driven by Isaac Lab's official pretrained rough-terrain walking policies, which take velocity commands.
-- **Sensors**: simulated Ouster OS1-32 lidar (10 Hz, per-point timestamps and real motion distortion), 200 Hz IMU, ground-truth pose.
+- **Sensors**: simulated spinning lidar (10 Hz, per-point timestamps and real motion distortion), Ouster OS1-32 by default or one of 6 other models (`--lidar`: Ouster OS1-64, OS1-128, OS0-128, Velodyne VLP-16, HDL-32E, Hesai PandarXT-32), 200 Hz IMU, ground-truth pose.
 - **Algorithms**:
   - [BIEVR-LIO](https://github.com/ethz-asl/BIEVR-LIO): lidar-inertial localization and mapping;
   - [elevation_mapping_cupy](https://github.com/leggedrobotics/elevation_mapping_cupy): GPU elevation map;
@@ -162,6 +162,7 @@ RViz opens after a few seconds. Once the terminal shows `Exploration Started`, t
 | Command | Option | Effect |
 |---|---|---|
 | `./sim.sh` | `--robot go2` | Use the Unitree Go2 (default ANYmal D). `explore.sh` automatically uses the same robot |
+| | `--lidar vlp16` | Another lidar model (default `os1_32`): `os1_64`, `os1_128`, `os0_128`, `vlp16`, `hdl32`, `xt32`; beams, field of view, resolution and range in `config/lidars.yaml`, which also takes new models. Same message format for all; GBPlanner2's sensor model follows the vertical field of view. Not emulated: non-repetitive scan patterns (Livox, Unitree L1), intensity, noise |
 | | `--headless` | No simulation window (saves GPU and RAM); watch in RViz only |
 | | `--scene NAME` | Another scene (`./sim.sh --list`; see [More scenes](#more-scenes)). Its start pose comes from `config/scenes.yaml` |
 | | `--spawn X Y [Z]` `--yaw DEG` | Another start pose; without Z the robot is put on the floor below (X, Y) |
@@ -202,6 +203,7 @@ Restart the corresponding terminal after a change. Config and launch files are r
 |---|---|---|
 | Top speed | `./explore.sh speed:=0.5` | restart terminal 2 |
 | Robot, scene, start pose | `./sim.sh --robot / --scene / --spawn / --yaw`; default start pose of each scene: `config/scenes.yaml` | restart both terminals |
+| Lidar model; its beams, field of view, resolution, range | `./sim.sh --lidar`; `config/lidars.yaml` | restart both terminals |
 | Lidar mount, footprint, obstacle height threshold, viewpoint height, spawn height | `config/robots.yaml` | restart both terminals. The lidar mount must also be changed in `calibration` of `config/bievr_sim_<robot>.yaml` |
 | BIEVR-LIO | `config/bievr_params.yaml`, `config/bievr_sim_<robot>.yaml` | restart terminal 2 |
 | TARE exploration | `config/tare_go2.yaml` (shared by both robots) | restart terminal 2 |
@@ -310,8 +312,8 @@ Main topics:
 ├── docker/                project Dockerfile, Isaac Lab patch, environment of the algorithm processes, Python wheel list
 ├── tools/                 download checkpoints and scenes (fetch_assets.py, add_scenes.sh), scene checks (check_scenes.sh,
 │                          scene_spawn.py); resumable download of the Isaac Sim image
-├── config/                per-robot parameters (robots.yaml), scene start poses (scenes.yaml), BIEVR-LIO, TARE and
-│                          elevation map configuration
+├── config/                per-robot parameters (robots.yaml), lidar models (lidars.yaml), scene start poses
+│                          (scenes.yaml), BIEVR-LIO, TARE and elevation map configuration
 ├── launch/                launch file of the whole stack (explore.launch.py), CMU module launch files (cmu/)
 ├── sim/                   simulator go2_sim.py, scene conversion, ground-truth localization, evaluation / recording / diagnostic tools
 ├── ros2_ws/               third-party sources and pinned versions (src.repos), fetch script, patches
@@ -352,6 +354,7 @@ These are limits of the current algorithms, and also what makes the platform use
 
 | Version | Contents |
 |---|---|
+| v2.1.0 | lidar models selectable with `./sim.sh --lidar`: Ouster OS1-32 (default), OS1-64, OS1-128, OS0-128, Velodyne VLP-16, HDL-32E, Hesai PandarXT-32 (`config/lidars.yaml`); GBPlanner2's sensor model follows the vertical field of view; GBPlanner2 screenshots |
 | v2.0.0 | GBPlanner2 as an optional exploration planner (ROS 1 container + `ros1_bridge`), with tools to compare it with TARE; 33 more scenes (`tools/add_scenes.sh`, `./sim.sh --scene NAME / --list`, start poses in `config/scenes.yaml`, floor slabs of SubT worlds visible to the height scan and the lidar); stuck and fall detection in the simulator that also catch a robot wedged among rocks; trajectory and local path in RViz; measured slope limits; scene attribution list |
 | v1.0.0 | first release: Isaac Sim + Isaac Lab, ANYmal D / Go2, BIEVR-LIO, elevation map, CMU terrain analysis and local planner, TARE exploration in the SubT cave `simple_cave_01`. On a machine where its container was never created, `setup.sh` stops at step 6 without a message: fixed in v2.0.0 |
 

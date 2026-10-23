@@ -4,6 +4,7 @@
 <launch>
   <arg name="config" default="/ws/config"/>
   <arg name="rviz" default="true"/>
+  <arg name="vfov" default="0.785398"/>   <!-- the lidar's vertical field of view [rad]: gbplanner.sh, config/lidars.yaml -->
   <param name="use_sim_time" value="true"/>   <!-- /clock comes from the Isaac sim through ros1_bridge -->
 
   <node pkg="gbplanner" type="gbplanner_node" name="gbplanner_node" output="screen" launch-prefix="stdbuf -oL -eL">
@@ -11,6 +12,7 @@
     <remap from="/pointcloud" to="/gbplanner/input_pointcloud"/>
     <rosparam command="load" file="$(arg config)/gbplanner_config.yaml"/>
     <rosparam command="load" file="$(arg config)/voxblox_config.yaml"/>
+    <rosparam param="SensorParams/OS1_32/fov" subst_value="true">[6.283185, $(arg vfov)]</rosparam>
   </node>
 
   <node pkg="pci_general" type="pci_general_ros_node" name="pci_general_ros_node" output="screen">

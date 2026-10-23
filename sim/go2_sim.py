@@ -5,9 +5,10 @@ Publishes (ROS 2, sim time):
   /clock                    rosgraph_msgs/Clock
   /imu/data                 sensor_msgs/Imu            every physics step (200 Hz), frame "imu"
   /lidar/points             sensor_msgs/PointCloud2    10 Hz, frame "lidar", fields x y z intensity t(uint32 ns, Ouster style)
-                            Ouster OS1-32 emulated with Isaac Lab's GPU RayCaster (the RTX lidar plugin needs driver
-                            >= 570; host has 550). The scan sweeps 1/20 rev per physics step, so motion distortion and
-                            per-point times are real. No intensity (0), hits only the static scene collider.
+                            the --lidar model (config/lidars.yaml, default Ouster OS1-32) emulated with Isaac Lab's
+                            GPU RayCaster (the RTX lidar plugin needs driver >= 570; host has 550). The scan sweeps
+                            1/20 rev per physics step, so motion distortion and per-point times are real. No intensity
+                            (0), no noise, hits only the static scene collider.
   /ground_truth/odom        nav_msgs/Odometry          50 Hz, frame "world" -> "base_gt"
 Subscribes:
   /sim/reset                std_msgs/String            "here" (default): stand the robot back up in place,
@@ -23,12 +24,17 @@ Started by ../sim.sh (see ../README.md), which runs inside the isaac_explore con
 import argparse
 import time
 
+import yaml
 from isaaclab.app import AppLauncher
+
+LIDARS = yaml.safe_load(open("/workspace/isaac_explore/config/lidars.yaml"))
 
 parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument("--scene", default="simple_cave_01",
                     help="scene name (sim/scenes/NAME.usd; start pose defaults in config/scenes.yaml) or a .usd path")
 parser.add_argument("--robot", choices=["go2", "anymal_d"], default="go2")
+parser.add_argument("--lidar", choices=sorted(LIDARS), default="os1_32",
+                    help="lidar model: beams, vertical field of view, resolution, range (config/lidars.yaml)")
 parser.add_argument("--checkpoint", default=None, help="policy (default: checkpoint in config/robots.yaml)")
 parser.add_argument("--spawn", type=float, nargs="+", default=None, metavar="X Y [Z]",
                     help="start position [m]; without Z the robot stands on the floor below (x, y) "
@@ -51,7 +57,6 @@ import math  # noqa: E402
 import os  # noqa: E402
 
 import numpy as np  # noqa: E402
-import yaml  # noqa: E402
 import rclpy  # noqa: E402
 import torch  # noqa: E402
 from builtin_interfaces.msg import Time  # noqa: E402
@@ -148,7 +153,8 @@ SPIN_CREEP = 0.15  # m/s added to pure turn commands (|vx| < SPIN_CREEP and |wz|
 # the behaviour validated at 0.5 m/s). ponytail: speed-from-yaw-rate rule; a curvature-aware follower is the fix.
 TURN_VX, TURN_WZ = 0.5, (0.2, 0.4)
 SCENE_MESH = "/World/ground/terrain/collision"  # sdf_to_usd.py bakes all colliders into this one mesh
-LIDAR_HZ, LIDAR_CH, LIDAR_COLS, LIDAR_VFOV = 10, 32, 1024, (-22.5, 22.5)  # Ouster OS1-32, 10 Hz, 1024 columns
+LIDAR = LIDARS[args.lidar]
+LIDAR_HZ, LIDAR_CH, LIDAR_COLS, LIDAR_VFOV = 10, LIDAR["channels"], LIDAR["cols"], tuple(LIDAR["vfov"])
 
 # ---------------- environment ----------------
 cfg = EnvCfg()
@@ -162,12 +168,14 @@ cfg.scene.height_scanner.mesh_prim_paths = [SCENE_MESH]  # RayCaster supports ex
 cfg.scene.height_scanner.offset.pos = (0.0, 0.0, 0.5)
 cfg.scene.imu = ImuCfg(prim_path="{ENV_REGEX_NS}/Robot/base")
 cfg.scene.lidar = RayCasterCfg(
-    prim_path="{ENV_REGEX_NS}/Robot/base", mesh_prim_paths=[SCENE_MESH], max_distance=100.0,
+    prim_path="{ENV_REGEX_NS}/Robot/base", mesh_prim_paths=[SCENE_MESH], max_distance=LIDAR["range"],
     offset=RayCasterCfg.OffsetCfg(pos=LIDAR_POS), ray_alignment="base",
     pattern_cfg=patterns.LidarPatternCfg(channels=LIDAR_CH, vertical_fov_range=LIDAR_VFOV,
                                          horizontal_fov_range=(-180.0, 180.0), horizontal_res=360.0 / LIDAR_COLS))
 cfg.scene.robot.init_state.pos = SPAWN
 cfg.scene.robot.init_state.rot = (math.cos(YAW / 2), 0.0, 0.0, math.sin(YAW / 2))   # w x y z
+print(f"[go2_sim] lidar {args.lidar}: {LIDAR_CH} beams {LIDAR_VFOV[0]}..{LIDAR_VFOV[1]} deg, {LIDAR_COLS} columns, "
+      f"{LIDAR['range']} m, {LIDAR_HZ} Hz", flush=True)
 print(f"[go2_sim] scene {SCENE_NAME}: start at ({SPAWN[0]:.1f}, {SPAWN[1]:.1f}, {SPAWN[2]:.2f}) heading "
       f"{math.degrees(YAW):.0f} deg", flush=True)
 # Never let PhysX put the robot to sleep: after standing still for a while it fell asleep, and the policy's joint

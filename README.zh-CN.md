@@ -19,7 +19,7 @@
 
 - **场景**：DARPA SubT 的洞穴 `simple_cave_01`（`setup.sh` 自动安装）；另有 33 个场景一条命令即可添加：其他 SubT 洞穴、矿道、NIOSH 真实矿井复刻、决赛和城市场地、真实矿洞扫描，以及程序化生成的受限地形（见[更多场景](#更多场景)）。
 - **机器人**：ANYmal D（默认）和 Unitree Go2，使用 Isaac Lab 官方预训练的复杂地形行走策略，接收速度指令。
-- **传感器**：模拟 Ouster OS1-32 激光雷达（10 Hz，带逐点时间戳和真实的运动畸变）、200 Hz IMU、真值位姿。
+- **传感器**：模拟机械旋转式激光雷达（10 Hz，带逐点时间戳和真实的运动畸变），默认 Ouster OS1-32，也可以用 `--lidar` 换成另外 6 种（Ouster OS1-64、OS1-128、OS0-128，Velodyne VLP-16、HDL-32E，禾赛 PandarXT-32）；200 Hz IMU；真值位姿。
 - **算法**：
   - [BIEVR-LIO](https://github.com/ethz-asl/BIEVR-LIO)：激光惯性定位建图；
   - [elevation_mapping_cupy](https://github.com/leggedrobotics/elevation_mapping_cupy)：GPU 高程图；
@@ -162,6 +162,7 @@ cd terra-incognita
 | 命令 | 选项 | 作用 |
 |---|---|---|
 | `./sim.sh` | `--robot go2` | 换成 Unitree Go2（默认 ANYmal D）。`explore.sh` 会自动使用同一种机器人 |
+| | `--lidar vlp16` | 换一种激光雷达（默认 `os1_32`）：`os1_64`、`os1_128`、`os0_128`、`vlp16`、`hdl32`、`xt32`；线数、视场、分辨率和量程在 `config/lidars.yaml`，也可以在里面添加新型号。所有型号的消息格式相同；GBPlanner2 的传感器模型会跟随垂直视场。不模拟：非重复扫描（Livox、宇树 L1）、反射强度、噪声 |
 | | `--headless` | 不开仿真窗口，省显存和内存，只看 RViz |
 | | `--scene 场景名` | 换场景（`./sim.sh --list` 列出可用场景，见[更多场景](#更多场景)），出生位姿取自 `config/scenes.yaml` |
 | | `--spawn X Y [Z]` `--yaw 角度` | 换出生位置和朝向；不给 Z 时自动放到 (X, Y) 处的地面上 |
@@ -202,6 +203,7 @@ LAUNCH_ARGS="lio:=gt" ./run_trial.sh 名字 [最长仿真秒数] [sim.sh 的选�
 |---|---|---|
 | 最高速度 | `./explore.sh speed:=0.5` | 重启终端 2 |
 | 机器人、场景、出生位姿 | `./sim.sh --robot / --scene / --spawn / --yaw`；各场景的默认出生位姿在 `config/scenes.yaml` | 重启两个终端 |
+| 激光雷达型号及其线数、视场、分辨率、量程 | `./sim.sh --lidar`；`config/lidars.yaml` | 重启两个终端 |
 | 雷达安装位置、车体尺寸、障碍高度阈值、视点高度、出生高度 | `config/robots.yaml` | 重启两个终端。雷达位置还要同步修改 `config/bievr_sim_<robot>.yaml` 的 `calibration` |
 | BIEVR-LIO | `config/bievr_params.yaml`、`config/bievr_sim_<robot>.yaml` | 重启终端 2 |
 | TARE 探索规划 | `config/tare_go2.yaml`（两种机器人共用） | 重启终端 2 |
@@ -310,7 +312,7 @@ ros1_ws/ros1.sh build           # 在容器里用 catkin 编译，约 2 分钟
 ├── docker/                项目镜像的 Dockerfile、Isaac Lab 补丁、算法进程的环境脚本、Python 包清单
 ├── tools/                 下载权重和场景（fetch_assets.py、add_scenes.sh）、检查场景（check_scenes.sh、scene_spawn.py）、
 │                          断点续传下载 Isaac Sim 镜像
-├── config/                每种机器人的参数（robots.yaml）、各场景的出生位姿（scenes.yaml），BIEVR-LIO、TARE、高程图的配置
+├── config/                每种机器人的参数（robots.yaml）、激光雷达型号（lidars.yaml）、各场景的出生位姿（scenes.yaml），BIEVR-LIO、TARE、高程图的配置
 ├── launch/                整个算法栈的 launch（explore.launch.py），CMU 模块的 launch（cmu/）
 ├── sim/                   仿真主程序 go2_sim.py、场景转换、真值定位，以及评估、记录、诊断工具
 ├── ros2_ws/               第三方源码的地址和固定版本（src.repos）、拉取脚本、补丁
@@ -351,6 +353,7 @@ ros1_ws/ros1.sh build           # 在容器里用 catkin 编译，约 2 分钟
 
 | 版本 | 内容 |
 |---|---|
+| v2.1.0 | 可用 `./sim.sh --lidar` 选择激光雷达型号：Ouster OS1-32（默认）、OS1-64、OS1-128、OS0-128，Velodyne VLP-16、HDL-32E，禾赛 PandarXT-32（`config/lidars.yaml`）；GBPlanner2 的传感器模型跟随垂直视场；GBPlanner2 截图 |
 | v2.0.0 | 新增可选的探索规划器 GBPlanner2（ROS 1 容器 + `ros1_bridge`），以及与 TARE 对比的工具；新增 33 个场景（`tools/add_scenes.sh`、`./sim.sh --scene 场景名 / --list`，出生位姿在 `config/scenes.yaml`，SubT 世界中的地板盒子对高度扫描和雷达可见）；仿真端的卡住和摔倒判定也能识别卡在石头间的情况；RViz 中显示轨迹和局部路径；实测的坡度上限；场景署名清单 |
 | v1.0.0 | 首个版本：Isaac Sim + Isaac Lab，ANYmal D / Go2，BIEVR-LIO，高程图，CMU 地形分析和局部规划，SubT 洞穴 `simple_cave_01` 中的 TARE 探索。在从未创建过容器的机器上，`setup.sh` 会在第 6 步无提示地退出，v2.0.0 已修复 |
 
