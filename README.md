@@ -7,6 +7,12 @@
 <p align="center">
   <img src="media/isaac_sim.png" width="49%" alt="Isaac Sim: ANYmal D in the starting area of the SubT cave (see-through rendering)">
   <img src="media/rviz.png" width="49%" alt="RViz: localization, mapping and TARE exploration planning">
+  <br><sub>TARE in the SubT cave <code>simple_cave_01</code>: Isaac Sim (left) and RViz (right)</sub>
+</p>
+<p align="center">
+  <img src="media/gbplanner_ros2_rviz.png" width="49%" alt="RViz: point-cloud map, the robot's trajectory (yellow) and the current way point (purple) while GBPlanner2 explores">
+  <img src="media/gbplanner_rviz.png" width="49%" alt="GBPlanner2's RViz: occupancy voxel map coloured by height and the planner's graph">
+  <br><sub>GBPlanner2 in <code>simple_cave_02</code>: RViz (left) and GBPlanner2's own RViz with its voxel map and planning graph (right)</sub>
 </p>
 
 ## Features

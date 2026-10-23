@@ -7,6 +7,12 @@
 <p align="center">
   <img src="media/isaac_sim.png" width="49%" alt="Isaac Sim：ANYmal D 站在 SubT 洞穴的出发区（半透明显示）">
   <img src="media/rviz.png" width="49%" alt="RViz：定位建图与 TARE 探索规划">
+  <br><sub>TARE 在 SubT 洞穴 <code>simple_cave_01</code> 中探索：Isaac Sim（左）和 RViz（右）</sub>
+</p>
+<p align="center">
+  <img src="media/gbplanner_ros2_rviz.png" width="49%" alt="RViz：GBPlanner2 探索时的点云地图、机器人轨迹（黄色）和当前航点（紫色）">
+  <img src="media/gbplanner_rviz.png" width="49%" alt="GBPlanner2 自带的 RViz：按高度着色的占据体素地图和规划图">
+  <br><sub>GBPlanner2 在 <code>simple_cave_02</code> 中探索：RViz（左），GBPlanner2 自带的 RViz，显示体素地图和规划图（右）</sub>
 </p>
 
 ## 功能
