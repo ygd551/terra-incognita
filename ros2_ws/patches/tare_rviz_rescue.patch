@@ -1,0 +1,35 @@
+--- a/src/tare_planner/rviz/tare_planner_ground.rviz
++++ b/src/tare_planner/rviz/tare_planner_ground.rviz
+@@ -567,6 +567,32 @@
+           Value: false
+       Enabled: true
+       Name: Local
++    - Class: rviz_default_plugins/MarkerArray
++      Enabled: true
++      Name: Artifacts
++      Namespaces:
++        {}
++      Topic:
++        Depth: 5
++        Durability Policy: Volatile
++        History Policy: Keep Last
++        Reliability Policy: Reliable
++        Value: /artifacts/markers
++      Value: true
++    - Class: rviz_default_plugins/Image
++      Enabled: true
++      Max Value: 1
++      Median window: 5
++      Min Value: 0
++      Name: Camera
++      Normalize Range: true
++      Topic:
++        Depth: 2
++        Durability Policy: Volatile
++        History Policy: Keep Last
++        Reliability Policy: Reliable
++        Value: /camera/image_raw
++      Value: true
+   Enabled: true
+   Global Options:
+     Background Color: 0; 0; 0

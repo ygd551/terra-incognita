@@ -55,3 +55,7 @@ repositories:
     type: git
     url: https://github.com/ntnu-arl/adaptive_obb_ros.git
     version: 7dc24c973d233f63d73f2a8548e6f5227bc422bb   # HEAD
+  FAST-LIVO2:
+    type: git
+    url: https://github.com/hku-mars/FAST-LIVO2.git
+    version: 0d2c0346107b75b59934975adec9a6eeeb913c64   # main (GPL-2.0; built only with its dependencies, fetch_src.sh)

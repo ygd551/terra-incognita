@@ -4,7 +4,7 @@ use_tf_transforms: True
 use_freespace_pointcloud: True
 tsdf_voxels_per_side: 16
 tsdf_voxel_size: 0.20
-max_ray_length_m: 20.0  # = SensorParams OS1_32 max_range (gain): mapped farther, a straight tunnel shows no unknown within any vertex's 20 m and GBPlanner goes home
+max_ray_length_m: 20.0  # = SensorParams lidar max_range (gain): mapped farther, a straight tunnel shows no unknown within any vertex's 20 m and GBPlanner goes home
 truncation_distance: 0.6 #1.0
 voxel_carving_enabled: True
 use_sparsity_compensation_factor: True

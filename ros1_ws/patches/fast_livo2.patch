@@ -1,0 +1,82 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 0652aab..208d867 100755
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -99,7 +99,7 @@ find_package(OpenCV REQUIRED)
+ find_package(Sophus REQUIRED)
+ find_package(Boost REQUIRED COMPONENTS thread)
+ 
+-set(Sophus_LIBRARIES libSophus.so)
++# isaac_explore: Sophus_LIBRARIES comes from find_package(Sophus) (ros1_ws/cmake/SophusConfig.cmake, full path)
+ 
+ # Define the catkin package
+ catkin_package(
+diff --git a/src/LIVMapper.cpp b/src/LIVMapper.cpp
+index 15af354..1b26ec0 100755
+--- a/src/LIVMapper.cpp
++++ b/src/LIVMapper.cpp
+@@ -715,6 +715,11 @@ void LIVMapper::standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
+   // ROS_INFO("get point cloud at time: %.6f", msg->header.stamp.toSec());
+   PointCloudXYZI::Ptr ptr(new PointCloudXYZI());
+   p_pre->process(msg, ptr);
++  if (!ptr || ptr->empty()) {   // isaac_explore: as livox_pcl_cbk; sync_packages reads points.back() (crashed on it)
++    ROS_ERROR("Received an empty point cloud");
++    mtx_buffer.unlock();
++    return;
++  }
+   lid_raw_data_buffer.push_back(ptr);
+   lid_header_time_buffer.push_back(cur_head_time);
+   last_timestamp_lidar = cur_head_time;
+@@ -1130,6 +1135,28 @@ void LIVMapper::publish_img_rgb(const image_transport::Publisher &pubImage, VIOM
+ }
+ 
+ // Provide output format for LiDAR-visual BA
++// isaac_explore: the map to save (pcd_save) collects every frame's points until the node stops: ~1 GB per few minutes
++// and memory to match (the container is capped). Above this many points it is thinned in place to one point per
++// pcd_save/filter_size_pcd voxel, the latest one seen (its colour is the latest view). Plain hashing with 64-bit voxel
++// keys (21 bits per axis: +-100 km at 0.1 m), not pcl::VoxelGrid: that one, instantiated here under -march=native,
++// crashed the node (SIGSEGV right when the map first reached this size), and overflows 32-bit indices past ~250 m.
++template <typename CloudPtr> static void compactMap(CloudPtr &cloud, double leaf)
++{
++  if (cloud->size() < 3000000) return;
++  std::unordered_map<uint64_t, size_t> last;   // voxel -> index of the latest point in it
++  last.reserve(cloud->size());
++  const auto key = [leaf](double v) { return static_cast<uint64_t>(static_cast<int64_t>(std::floor(v / leaf)) & 0x1FFFFF); };
++  for (size_t i = 0; i < cloud->size(); ++i)
++  {
++    const auto &p = cloud->points[i];
++    last[(key(p.x) << 42) | (key(p.y) << 21) | key(p.z)] = i;
++  }
++  CloudPtr out(new typename CloudPtr::element_type());
++  out->reserve(last.size());
++  for (const auto &kv : last) out->push_back(cloud->points[kv.second]);
++  cloud = out;
++}
++
+ void LIVMapper::publish_frame_world(const ros::Publisher &pubLaserCloudFullRes, VIOManagerPtr vio_manager)
+ {
+   if (pcl_w_wait_pub->empty()) return;
+@@ -1210,10 +1237,12 @@ void LIVMapper::publish_frame_world(const ros::Publisher &pubLaserCloudFullRes,
+         if (slam_mode_ == LIVO)
+         {
+           *pcl_wait_save += *laserCloudWorldRGB;
++          if (pcd_save_interval < 0) compactMap(pcl_wait_save, filter_size_pcd);   // isaac_explore
+         }
+         else
+         {
+           *pcl_wait_save_intensity += *pcl_w_wait_pub;
++          if (pcd_save_interval < 0) compactMap(pcl_wait_save_intensity, filter_size_pcd);   // isaac_explore
+         }
+         if(LidarMeasures.lio_vio_flg == LIO || LidarMeasures.lio_vio_flg == LO) scan_wait_num++;
+         break;
+@@ -1337,7 +1366,9 @@ void LIVMapper::publish_odometry(const ros::Publisher &pubOdomAftMapped)
+ {
+   odomAftMapped.header.frame_id = "camera_init";
+   odomAftMapped.child_frame_id = "aft_mapped";
+-  odomAftMapped.header.stamp = ros::Time::now(); //.ros::Time()fromSec(last_timestamp_lidar);
++  // isaac_explore: stamp = the time the state refers to (as in the evo pose file), not the publishing time: poses
++  // are interpolated per lidar point downstream (sim/gt_odom.py --pose)
++  odomAftMapped.header.stamp = ros::Time().fromSec(LidarMeasures.last_lio_update_time);
+   set_posestamp(odomAftMapped.pose.pose);
+ 
+   static tf::TransformBroadcaster br;

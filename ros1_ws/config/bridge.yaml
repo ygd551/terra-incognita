@@ -5,3 +5,4 @@ topics:
   - {topic: /bievr_lio/odom, type: nav_msgs/msg/Odometry, queue_size: 10}                    # ROS 2 -> ROS 1
   - {topic: /bievr_lio/points/registered, type: sensor_msgs/msg/PointCloud2, queue_size: 2}  # ROS 2 -> ROS 1
   - {topic: /way_point, type: geometry_msgs/msg/PointStamped, queue_size: 2}                 # ROS 1 -> ROS 2
+  - {topic: /cmd_vel_stamped, type: geometry_msgs/msg/TwistStamped, queue_size: 2}          # ROS 1 -> ROS 2 (drone)

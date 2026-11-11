@@ -4,22 +4,24 @@
 <launch>
   <arg name="config" default="/ws/config"/>
   <arg name="rviz" default="true"/>
+  <arg name="hfov" default="6.283185"/>   <!-- the lidar's horizontal field of view [rad]: gbplanner.sh, config/lidars.yaml -->
   <arg name="vfov" default="0.785398"/>   <!-- the lidar's vertical field of view [rad]: gbplanner.sh, config/lidars.yaml -->
+  <arg name="variant" default=""/>   <!-- "_MODEL" loads gbplanner_config_MODEL.yaml and pci_config_MODEL.yaml (gbplanner.sh) -->
   <param name="use_sim_time" value="true"/>   <!-- /clock comes from the Isaac sim through ros1_bridge -->
 
   <node pkg="gbplanner" type="gbplanner_node" name="gbplanner_node" output="screen" launch-prefix="stdbuf -oL -eL">
     <remap from="odometry" to="/bievr_lio/odom"/>
     <remap from="/pointcloud" to="/gbplanner/input_pointcloud"/>
-    <rosparam command="load" file="$(arg config)/gbplanner_config.yaml"/>
+    <rosparam command="load" file="$(arg config)/gbplanner_config$(arg variant).yaml"/>
     <rosparam command="load" file="$(arg config)/voxblox_config.yaml"/>
-    <rosparam param="SensorParams/OS1_32/fov" subst_value="true">[6.283185, $(arg vfov)]</rosparam>
+    <rosparam param="SensorParams/lidar/fov" subst_value="true">[$(arg hfov), $(arg vfov)]</rosparam>
   </node>
 
   <node pkg="pci_general" type="pci_general_ros_node" name="pci_general_ros_node" output="screen">
     <remap from="planner_server" to="gbplanner"/>
     <remap from="planner_homing_server" to="gbplanner/homing"/>
     <remap from="odometry" to="/bievr_lio/odom"/>
-    <rosparam command="load" file="$(arg config)/pci_config.yaml"/>
+    <rosparam command="load" file="$(arg config)/pci_config$(arg variant).yaml"/>
   </node>
 
   <!-- no D-Bus session in the container: without this, RViz's Qt aborts at start-up (libdbus, core dump) -->

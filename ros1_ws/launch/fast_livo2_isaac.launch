@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<!-- FAST-LIVO2 on the Isaac Sim robot (ros1_ws/fast_livo2.sh; ROS 1 master on its own port, 11312, so it starts and stops
+     independently of GBPlanner2's). Inputs bridged from ROS 2: /lidar/points, /imu/data, /camera/image_raw, /clock.
+     Output used by the ROS 2 stack: /aft_mapped_to_init (sim/gt_odom.py turns it into /bievr_lio/*). -->
+<launch>
+  <arg name="rviz" default="true"/>
+  <arg name="robot_config"/>   <!-- logs/fast_livo2_<robot>.yaml: img_en, extrinsics, point_filter_num, camera -->
+  <param name="use_sim_time" value="true"/>
+  <rosparam command="load" file="/ws/config/fast_livo2_isaac.yaml"/>
+  <rosparam command="load" file="$(arg robot_config)"/>
+
+  <node pkg="fast_livo" type="fastlivo_mapping" name="laserMapping" output="screen" launch-prefix="stdbuf -oL -eL"/>
+
+  <!-- the exploration's frame map (= odom: sim/gt_odom.py passes FAST-LIVO2's pose on unchanged) is its camera_init, so the
+       way point (/way_point, frame map) shows in its RViz -->
+  <node pkg="tf2_ros" type="static_transform_publisher" name="map_is_camera_init" args="0 0 0 0 0 0 camera_init map"/>
+
+  <!-- its own RViz: the colored map (/cloud_registered accumulated), the current image, the trajectory, the way point.
+       No D-Bus session in the container: without the env line RViz's Qt aborts at start-up (libdbus, core dump), as in
+       gbplanner_isaac -->
+  <node if="$(arg rviz)" pkg="rviz" type="rviz" name="fast_livo2_rviz" args="-d /ws/config/fast_livo2_isaac.rviz">
+    <env name="DBUS_SESSION_BUS_ADDRESS" value="disabled:"/>
+  </node>
+</launch>

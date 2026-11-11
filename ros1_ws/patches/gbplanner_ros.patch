@@ -40,6 +40,110 @@ index f274a62..9b5a315 100644
  #define param_verbosity Verbosity::SILENT
  
  #define ROSPARAM_ERROR(param_name)                                         \
+diff --git a/planner_common/src/voxblox/voxblox_alt_impl.cpp b/planner_common/src/voxblox/voxblox_alt_impl.cpp
+index 78d8a55..ed9179d 100644
+--- a/planner_common/src/voxblox/voxblox_alt_impl.cpp
++++ b/planner_common/src/voxblox/voxblox_alt_impl.cpp
+@@ -568,8 +568,11 @@ void MapManagerVoxblox<SDFServerType, SDFVoxelType>::getScanStatus(
+                num_occupied_voxels = 0;
+   int height = sensor_params.height;
+   int width = sensor_params.width;
++  // isaac_explore (upstream heap overflow): indexed starting_points(x, y) = (column, row) below, but it was allocated
++  // height x width, and x + 1 was written at x = width - 1. Harmless with a 360 deg lidar (much wider than tall);
++  // a Livox Avia (about as wide as tall) wrote past the end and crashed GBPlanner in its first gain evaluation.
+   Eigen::MatrixXd starting_points(
+-      height, width);  // This will store the distance along the ray from where
++      width, height);  // This will store the distance along the ray from where
+                        // the raycasting should begin
+   starting_points.setZero();
+ 
+@@ -674,7 +677,7 @@ void MapManagerVoxblox<SDFServerType, SDFVoxelType>::getScanStatus(
+           //   starting_points(x-1, y) = std::min(num_steps-1, k);
+           // if(y_increment_dist <= voxel_size && y > 0)
+           //   starting_points(x, y-1) = std::min(num_steps-1, k);
+-          // if(diag_increment_dist <= voxel_size && x < width && y > 0)
++          // if(diag_increment_dist <= voxel_size && x + 1 < width && y > 0)
+           //   starting_points(x-1, y-1) = std::min(num_steps-1, k);
+ 
+           continue;
+@@ -691,11 +694,11 @@ void MapManagerVoxblox<SDFServerType, SDFVoxelType>::getScanStatus(
+           double y_increment_dist = step * sensor_params.resolution[1];
+           double diag_increment_dist = std::sqrt(std::pow(x_increment_dist, 2) +
+                                                  std::pow(y_increment_dist, 2));
+-          if (x_increment_dist <= voxel_size && x < width)
++          if (x_increment_dist <= voxel_size && x + 1 < width)
+             starting_points(x + 1, y) = std::min(ray_norm, step);
+           if (y_increment_dist <= voxel_size && y > 0)
+             starting_points(x, y - 1) = std::min(ray_norm, step);
+-          if (diag_increment_dist <= voxel_size && x < width && y > 0)
++          if (diag_increment_dist <= voxel_size && x + 1 < width && y > 0)
+             starting_points(x + 1, y - 1) = std::min(ray_norm, step);
+           continue;
+         }
+@@ -711,11 +714,11 @@ void MapManagerVoxblox<SDFServerType, SDFVoxelType>::getScanStatus(
+         double y_increment_dist = step * sensor_params.resolution[1];
+         double diag_increment_dist = std::sqrt(std::pow(x_increment_dist, 2) +
+                                                std::pow(y_increment_dist, 2));
+-        if (x_increment_dist <= voxel_size && x < width)
++        if (x_increment_dist <= voxel_size && x + 1 < width)
+           starting_points(x + 1, y) = -step;
+         if (y_increment_dist <= voxel_size && y > 0)
+           starting_points(x, y - 1) = -step;
+-        if (diag_increment_dist <= voxel_size && x < width && y > 0)
++        if (diag_increment_dist <= voxel_size && x + 1 < width && y > 0)
+           starting_points(x + 1, y - 1) = -step;
+         break;
+       }
+@@ -736,8 +739,11 @@ void MapManagerVoxblox<SDFServerType, SDFVoxelType>::getScanStatusIterative(
+                num_occupied_voxels = 0;
+   int height = sensor_params.height;
+   int width = sensor_params.width;
++  // isaac_explore (upstream heap overflow): indexed starting_points(x, y) = (column, row) below, but it was allocated
++  // height x width, and x + 1 was written at x = width - 1. Harmless with a 360 deg lidar (much wider than tall);
++  // a Livox Avia (about as wide as tall) wrote past the end and crashed GBPlanner in its first gain evaluation.
+   Eigen::MatrixXd starting_points(
+-      height, width);  // This will store the distance along the ray from where
++      width, height);  // This will store the distance along the ray from where
+                        // the raycasting should begin
+   starting_points.setZero();
+ 
+@@ -842,7 +848,7 @@ void MapManagerVoxblox<SDFServerType, SDFVoxelType>::getScanStatusIterative(
+           //   starting_points(x-1, y) = std::min(num_steps-1, k);
+           // if(y_increment_dist <= voxel_size && y > 0)
+           //   starting_points(x, y-1) = std::min(num_steps-1, k);
+-          // if(diag_increment_dist <= voxel_size && x < width && y > 0)
++          // if(diag_increment_dist <= voxel_size && x + 1 < width && y > 0)
+           //   starting_points(x-1, y-1) = std::min(num_steps-1, k);
+ 
+           continue;
+@@ -859,11 +865,11 @@ void MapManagerVoxblox<SDFServerType, SDFVoxelType>::getScanStatusIterative(
+           double y_increment_dist = step * sensor_params.resolution[1];
+           double diag_increment_dist = std::sqrt(std::pow(x_increment_dist, 2) +
+                                                  std::pow(y_increment_dist, 2));
+-          if (x_increment_dist <= voxel_size && x < width)
++          if (x_increment_dist <= voxel_size && x + 1 < width)
+             starting_points(x + 1, y) = std::min(ray_norm, step);
+           if (y_increment_dist <= voxel_size && y > 0)
+             starting_points(x, y - 1) = std::min(ray_norm, step);
+-          if (diag_increment_dist <= voxel_size && x < width && y > 0)
++          if (diag_increment_dist <= voxel_size && x + 1 < width && y > 0)
+             starting_points(x + 1, y - 1) = std::min(ray_norm, step);
+           continue;
+         }
+@@ -879,11 +885,11 @@ void MapManagerVoxblox<SDFServerType, SDFVoxelType>::getScanStatusIterative(
+         double y_increment_dist = step * sensor_params.resolution[1];
+         double diag_increment_dist = std::sqrt(std::pow(x_increment_dist, 2) +
+                                                std::pow(y_increment_dist, 2));
+-        if (x_increment_dist <= voxel_size && x < width)
++        if (x_increment_dist <= voxel_size && x + 1 < width)
+           starting_points(x + 1, y) = -step;
+         if (y_increment_dist <= voxel_size && y > 0)
+           starting_points(x, y - 1) = -step;
+-        if (diag_increment_dist <= voxel_size && x < width && y > 0)
++        if (diag_increment_dist <= voxel_size && x + 1 < width && y > 0)
+           starting_points(x + 1, y - 1) = -step;
+         break;
+       }
 diff --git a/planner_control_interface/include/planner_control_interface/pci_manager.h b/planner_control_interface/include/planner_control_interface/pci_manager.h
 index a392ff6..a8ff7a4 100644
 --- a/planner_control_interface/include/planner_control_interface/pci_manager.h

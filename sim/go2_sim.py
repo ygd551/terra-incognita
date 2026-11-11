@@ -7,7 +7,8 @@ Publishes (ROS 2, sim time):
   /lidar/points             sensor_msgs/PointCloud2    10 Hz, frame "lidar", fields x y z intensity t(uint32 ns, Ouster style)
                             the --lidar model (config/lidars.yaml, default Ouster OS1-32) emulated with Isaac Lab's
                             GPU RayCaster (the RTX lidar plugin needs driver >= 570; host has 550). The scan sweeps
-                            1/20 rev per physics step, so motion distortion and per-point times are real. No intensity
+                            1/20 rev per physics step (a Livox: that step's shots of its rosette), so motion distortion
+                            and per-point times are real. No intensity
                             (0), no noise, hits only the static scene collider.
   /ground_truth/odom        nav_msgs/Odometry          50 Hz, frame "world" -> "base_gt"
 Subscribes:
@@ -35,7 +36,9 @@ parser.add_argument("--scene", default="simple_cave_01",
 parser.add_argument("--robot", choices=["go2", "anymal_d"], default="go2")
 parser.add_argument("--lidar", choices=sorted(LIDARS), default="os1_32",
                     help="lidar model: beams, vertical field of view, resolution, range (config/lidars.yaml)")
-parser.add_argument("--checkpoint", default=None, help="policy (default: checkpoint in config/robots.yaml)")
+parser.add_argument("--checkpoint", default=None,
+                    help="policy, e.g. logs/train/NAME/model_2498.pt: absolute or relative to the project "
+                         "(default: checkpoint in config/robots.yaml)")
 parser.add_argument("--spawn", type=float, nargs="+", default=None, metavar="X Y [Z]",
                     help="start position [m]; without Z the robot stands on the floor below (x, y) "
                          "(default: the scene's spawn in config/scenes.yaml, else 2 0)")
@@ -59,20 +62,18 @@ import os  # noqa: E402
 import numpy as np  # noqa: E402
 import rclpy  # noqa: E402
 import torch  # noqa: E402
-from builtin_interfaces.msg import Time  # noqa: E402
 from geometry_msgs.msg import PointStamped, Twist, TwistStamped  # noqa: E402
 from nav_msgs.msg import Odometry, Path  # noqa: E402
-from rosgraph_msgs.msg import Clock  # noqa: E402
 from rsl_rl.runners import OnPolicyRunner  # noqa: E402
-from sensor_msgs.msg import Imu, PointCloud2, PointField  # noqa: E402
 from std_msgs.msg import String  # noqa: E402
 
-import isaaclab.sim as sim_utils  # noqa: E402
 from isaaclab.envs import ManagerBasedRLEnv  # noqa: E402
-from isaaclab.sensors import ImuCfg, RayCasterCfg, patterns  # noqa: E402
+from isaaclab.sensors import ImuCfg  # noqa: E402
 from isaaclab.terrains import TerrainImporterCfg  # noqa: E402
-from isaaclab.utils.math import quat_apply_inverse, yaw_quat  # noqa: E402
+from isaaclab.utils.math import yaw_quat  # noqa: E402
 from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper  # noqa: E402
+
+import sim_common as sc  # noqa: E402  (next to this script: scene, lidar, IMU and ground-truth output)
 if args.robot == "go2":
     from isaaclab_tasks.manager_based.locomotion.velocity.config.go2.agents.rsl_rl_ppo_cfg import (  # noqa: E402
         UnitreeGo2RoughPPORunnerCfg as RunnerCfg,
@@ -91,36 +92,9 @@ else:
 ROBOT = yaml.safe_load(open("/workspace/isaac_explore/config/robots.yaml"))[args.robot]
 # Lidar mount on the base link (= the imu frame), no rotation. BIEVR reads it from config/bievr_sim_<robot>.yaml.
 LIDAR_POS = tuple(ROBOT["lidar_pos"])
-CHECKPOINT = args.checkpoint or os.path.join("/workspace/isaac_explore", ROBOT["checkpoint"])
-SCENE_USD = args.scene if args.scene.endswith(".usd") else f"/workspace/isaac_explore/sim/scenes/{args.scene}.usd"
-SCENE_NAME = os.path.splitext(os.path.basename(SCENE_USD))[0]
-SCENE = (yaml.safe_load(open("/workspace/isaac_explore/config/scenes.yaml")) or {}).get(SCENE_NAME, {})
-
-
-def floor_z(usd, x, y, z_ref):
-    """Height of the scene collider at (x, y): of the surfaces above / below that point, the one closest to z_ref
-    (not the highest: caves have a roof). The collider is one triangle mesh in world coordinates (sdf_to_usd.py)."""
-    from pxr import Usd, UsdGeom
-    stage = Usd.Stage.Open(usd)   # keep a reference: a temporary stage is freed and its prims turn invalid
-    mesh = UsdGeom.Mesh(stage.GetPrimAtPath("/World/collision"))
-    p = np.array(mesh.GetPointsAttr().Get(), float)
-    a, b, c = (p[i] for i in np.array(mesh.GetFaceVertexIndicesAttr().Get()).reshape(-1, 3).T)
-    e1, e2, q = b[:, :2] - a[:, :2], c[:, :2] - a[:, :2], np.array([x, y]) - a[:, :2]
-    den = e1[:, 0] * e2[:, 1] - e2[:, 0] * e1[:, 1]
-    den = np.where(np.abs(den) > 1e-12, den, np.nan)   # vertical triangles have no xy area
-    u = (q[:, 0] * e2[:, 1] - e2[:, 0] * q[:, 1]) / den   # barycentric coordinates in the xy projection
-    v = (e1[:, 0] * q[:, 1] - q[:, 0] * e1[:, 1]) / den
-    hit = (u >= 0) & (v >= 0) & (u + v <= 1)
-    z = (a[:, 2] + u * (b[:, 2] - a[:, 2]) + v * (c[:, 2] - a[:, 2]))[hit]
-    return float(z[np.argmin(np.abs(z - z_ref))]) if len(z) else z_ref
-
-
-_x, _y, _zref = (list(SCENE.get("spawn", [2.0, 0.0])) + [0.0])[:3]
-if args.spawn:
-    _x, _y = args.spawn[:2]
-SPAWN = (tuple(args.spawn[:3]) if args.spawn and len(args.spawn) >= 3 else
-         (_x, _y, floor_z(SCENE_USD, _x, _y, _zref) + ROBOT["spawn_z"]))
-YAW = math.radians(args.yaw if args.yaw is not None else SCENE.get("yaw", 0.0))
+# --checkpoint: absolute, or relative to the project (logs/train/NAME/model_2498.pt)
+CHECKPOINT = os.path.join("/workspace/isaac_explore", args.checkpoint or ROBOT["checkpoint"])
+SCENE_USD, SCENE_NAME, SPAWN, YAW = sc.scene_and_start(args.scene, args.spawn, args.yaw, ROBOT["spawn_z"])
 # |vx|, |vy|, |wz|. Trained range is +-1, but pure in-place turns at 1 rad/s make the pretrained policy stumble
 # (IMU spikes of 160 m/s^2, falls); 0.6 rad/s is calm.
 CMD_LIMITS = np.array([1.0, 1.0, 0.6])
@@ -152,30 +126,23 @@ SPIN_CREEP = 0.15  # m/s added to pure turn commands (|vx| < SPIN_CREEP and |wz|
 # the top speed). vx is capped from full at |wz| <= TURN_WZ[0] down to TURN_VX at |wz| >= TURN_WZ[1] (radius ~1 m,
 # the behaviour validated at 0.5 m/s). ponytail: speed-from-yaw-rate rule; a curvature-aware follower is the fix.
 TURN_VX, TURN_WZ = 0.5, (0.2, 0.4)
-SCENE_MESH = "/World/ground/terrain/collision"  # sdf_to_usd.py bakes all colliders into this one mesh
 LIDAR = LIDARS[args.lidar]
-LIDAR_HZ, LIDAR_CH, LIDAR_COLS, LIDAR_VFOV = 10, LIDAR["channels"], LIDAR["cols"], tuple(LIDAR["vfov"])
 
 # ---------------- environment ----------------
 cfg = EnvCfg()
 cfg.scene.num_envs = 1
 cfg.scene.terrain = TerrainImporterCfg(prim_path="/World/ground", terrain_type="usd", usd_path=SCENE_USD)
-cfg.scene.height_scanner.mesh_prim_paths = [SCENE_MESH]  # RayCaster supports exactly one mesh
+cfg.scene.height_scanner.mesh_prim_paths = [sc.SCENE_MESH]  # RayCaster supports exactly one mesh
 # Training casts the height scan from 20 m above the base; under a cave roof those rays hit the rock's top surface
 # and the policy sees a 16 m wall (it froze and tipped over at the cave mouth). The observation is
 # base_z - hit_z - 0.5, independent of the ray start height, so starting just above the base is equivalent
 # whenever there is a ceiling - and blind to anything taller than 0.5 m above the base (fine: clipped at 1 m anyway).
 cfg.scene.height_scanner.offset.pos = (0.0, 0.0, 0.5)
 cfg.scene.imu = ImuCfg(prim_path="{ENV_REGEX_NS}/Robot/base")
-cfg.scene.lidar = RayCasterCfg(
-    prim_path="{ENV_REGEX_NS}/Robot/base", mesh_prim_paths=[SCENE_MESH], max_distance=LIDAR["range"],
-    offset=RayCasterCfg.OffsetCfg(pos=LIDAR_POS), ray_alignment="base",
-    pattern_cfg=patterns.LidarPatternCfg(channels=LIDAR_CH, vertical_fov_range=LIDAR_VFOV,
-                                         horizontal_fov_range=(-180.0, 180.0), horizontal_res=360.0 / LIDAR_COLS))
+cfg.scene.lidar = sc.lidar_cfg("{ENV_REGEX_NS}/Robot/base", LIDAR, LIDAR_POS, SCENE_USD, cfg.sim.dt)
 cfg.scene.robot.init_state.pos = SPAWN
 cfg.scene.robot.init_state.rot = (math.cos(YAW / 2), 0.0, 0.0, math.sin(YAW / 2))   # w x y z
-print(f"[go2_sim] lidar {args.lidar}: {LIDAR_CH} beams {LIDAR_VFOV[0]}..{LIDAR_VFOV[1]} deg, {LIDAR_COLS} columns, "
-      f"{LIDAR['range']} m, {LIDAR_HZ} Hz", flush=True)
+print(f"[go2_sim] lidar {sc.lidar_desc(args.lidar, LIDAR)}, {sc.LIDAR_HZ} Hz", flush=True)
 print(f"[go2_sim] scene {SCENE_NAME}: start at ({SPAWN[0]:.1f}, {SPAWN[1]:.1f}, {SPAWN[2]:.2f}) heading "
       f"{math.degrees(YAW):.0f} deg", flush=True)
 # Never let PhysX put the robot to sleep: after standing still for a while it fell asleep, and the policy's joint
@@ -200,28 +167,18 @@ if args.see_through > 0:  # the GUI camera follows the robot, looking down throu
     cfg.viewer.eye, cfg.viewer.lookat = (-1.5, -1.5, 10.0), (0.0, 0.0, 0.0)
 env = ManagerBasedRLEnv(cfg)
 if args.see_through > 0:
-    # one translucent material over the whole scene subtree, overriding the meshes' own materials (the robot lives
-    # under /World/envs and keeps its look). Isaac Lab's render presets switch RTX translucency off; without it any
-    # opacity < 1 renders the rock fully invisible. Dark blue stays visible against the bright sky.
-    import carb  # noqa: E402
-
-    carb.settings.get_settings().set("/rtx/translucency/enabled", True)
-    carb.settings.get_settings().set("/rtx/raytracing/fractionalCutoutOpacity", True)
-    see_through = sim_utils.PreviewSurfaceCfg(diffuse_color=(0.15, 0.3, 0.6), roughness=1.0, opacity=args.see_through)
-    see_through.func("/World/Looks/see_through", see_through)
-    sim_utils.bind_visual_material("/World/ground", "/World/Looks/see_through", stronger_than_descendants=True)
+    sc.see_through(args.see_through)
 venv = RslRlVecEnvWrapper(env)
 runner = OnPolicyRunner(venv, RunnerCfg().to_dict(), log_dir=None, device=env.device)
 runner.load(CHECKPOINT)
+print(f"[go2_sim] walking policy {CHECKPOINT}", flush=True)
 policy = runner.get_inference_policy(device=env.device)
 
 # ---------------- ROS 2 ----------------
 rclpy.init()
 node = rclpy.create_node("go2_sim")
-pub_clock = node.create_publisher(Clock, "/clock", 10)
-pub_imu = node.create_publisher(Imu, "/imu/data", 200)
-pub_pc = node.create_publisher(PointCloud2, "/lidar/points", 5)
-pub_gt = node.create_publisher(Odometry, "/ground_truth/odom", 10)
+sensors = sc.Sensors(node, env.scene["imu"], env.scene["lidar"], env.scene["robot"], LIDAR_POS, env.physics_dt,
+                     LIDAR)
 cmd = np.zeros(3)  # latest requested command
 cmd_applied = np.zeros(3)  # slew-limited command actually given to the policy
 
@@ -257,83 +214,6 @@ def reset_robot(mode, log=True):
     env.action_manager.reset()
     if log:
         print(f"[go2_sim] robot reset ({mode}) to {pose[0, :3].tolist()}. Restart the LIO now.", flush=True)
-
-
-def stamp(t):
-    ns = int(round(t * 1e9))
-    return Time(sec=ns // 1_000_000_000, nanosec=ns % 1_000_000_000)
-
-
-def publish_imu(t):
-    d = env.scene["imu"].data
-    m = Imu()
-    m.header.stamp, m.header.frame_id = stamp(t), "imu"
-    w, a, q = d.ang_vel_b[0].tolist(), d.lin_acc_b[0].tolist(), d.quat_w[0].tolist()  # quat wxyz
-    m.angular_velocity.x, m.angular_velocity.y, m.angular_velocity.z = w
-    m.linear_acceleration.x, m.linear_acceleration.y, m.linear_acceleration.z = a
-    m.orientation.w, m.orientation.x, m.orientation.y, m.orientation.z = q
-    pub_imu.publish(m)
-    c = Clock()
-    c.clock = m.header.stamp
-    pub_clock.publish(c)
-
-
-def publish_gt(t):
-    r = env.scene["robot"].data
-    m = Odometry()
-    m.header.stamp, m.header.frame_id, m.child_frame_id = stamp(t), "world", "base_gt"
-    p, q = r.root_pos_w[0].tolist(), r.root_quat_w[0].tolist()
-    m.pose.pose.position.x, m.pose.pose.position.y, m.pose.pose.position.z = p
-    m.pose.pose.orientation.w, m.pose.pose.orientation.x, m.pose.pose.orientation.y, m.pose.pose.orientation.z = q
-    v, w = r.root_lin_vel_b[0].tolist(), r.root_ang_vel_b[0].tolist()
-    m.twist.twist.linear.x, m.twist.twist.linear.y, m.twist.twist.linear.z = v
-    m.twist.twist.angular.x, m.twist.twist.angular.y, m.twist.twist.angular.z = w
-    pub_gt.publish(m)
-
-
-PC_DTYPE = np.dtype([("x", "<f4"), ("y", "<f4"), ("z", "<f4"), ("intensity", "<f4"), ("t", "<u4")])
-PC_FIELDS = [PointField(name=n, offset=PC_DTYPE.fields[n][1], datatype=dt, count=1)
-             for n, dt in (("x", 7), ("y", 7), ("z", 7), ("intensity", 7), ("t", 6))]
-# rolling scan: each physics step casts only the azimuth slice the spinning head is at, in the sensor frame of
-# that instant (exactly how a real spinning lidar distorts under motion)
-lidar = env.scene["lidar"]
-n_slices = round(1.0 / (LIDAR_HZ * env.physics_dt))  # 20 at 200 Hz physics
-az = torch.atan2(lidar.ray_directions[0, :, 1], lidar.ray_directions[0, :, 0])  # [-pi, pi)
-slice_rays = [torch.nonzero(((az + math.pi) / (2 * math.pi) * n_slices).long().clamp(max=n_slices - 1) == k)[:, 0]
-              for k in range(n_slices)]
-scan = {"k": 0, "t0": 0.0, "pts": [], "ts": []}
-lidar_offset = torch.tensor(LIDAR_POS, device=env.device)  # mount rotation is identity
-
-
-def lidar_step(t):
-    """Call after every physics step: cast the current slice, publish when the revolution completes."""
-    k = scan["k"]
-    if k == 0:
-        scan["t0"], scan["pts"], scan["ts"] = t, [], []
-    d = lidar.data
-    hits = d.ray_hits_w[0, slice_rays[k]]
-    hits = hits[torch.isfinite(hits).all(-1)]
-    # RayCaster's data.pos_w/quat_w are the *base* pose (the mount offset is only baked into the ray starts), so
-    # subtract LIDAR_POS to get points in the lidar frame. Without this the cloud was 0.18 m off the extrinsic in
-    # config/bievr_sim_go2.yaml: invisible when walking straight, but every in-place turn made BIEVR-LIO diverge.
-    p = quat_apply_inverse(d.quat_w[0].expand(len(hits), 4), hits - d.pos_w[0]) - lidar_offset
-    scan["pts"].append(p)
-    scan["ts"].append(torch.full((len(p),), t - scan["t0"], device=p.device))
-    scan["k"] = (k + 1) % n_slices
-    if scan["k"] == 0:
-        publish_scan(torch.cat(scan["pts"]).cpu().numpy(), torch.cat(scan["ts"]).cpu().numpy(), scan["t0"])
-
-
-def publish_scan(xyz, dt, t0):
-    pc = np.zeros(len(xyz), PC_DTYPE)
-    pc["x"], pc["y"], pc["z"] = xyz[:, 0], xyz[:, 1], xyz[:, 2]
-    pc["t"] = np.round(dt * 1e9).astype(np.uint32)
-    m = PointCloud2()
-    m.header.stamp, m.header.frame_id = stamp(t0), "lidar"  # Ouster convention: stamp = scan start
-    m.height, m.width = 1, len(pc)
-    m.fields, m.is_bigendian, m.point_step = PC_FIELDS, False, PC_DTYPE.itemsize
-    m.row_step, m.is_dense, m.data = PC_DTYPE.itemsize * len(pc), True, pc.tobytes()
-    pub_pc.publish(m)
 
 
 # ---------------- main loop: ManagerBasedRLEnv.step() minus rewards/resets, IMU at physics rate ----------------
@@ -440,10 +320,10 @@ while app.is_running():
             if env._sim_step_counter % env.cfg.sim.render_interval == 0:
                 env.sim.render()
             env.scene.update(dt=env.physics_dt)
-            publish_imu(env.sim.current_time)
-            lidar_step(env.sim.current_time)
+            sensors.imu(env.sim.current_time)
+            sensors.lidar_step(env.sim.current_time)
         t = env.sim.current_time
-        publish_gt(t)
+        sensors.gt(t)
         obs = env.observation_manager.compute(update_history=True)["policy"]
     if not args.no_realtime:
         lag = (t - sim0) - (time.time() - wall0)

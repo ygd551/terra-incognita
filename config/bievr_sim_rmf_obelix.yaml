@@ -1,0 +1,15 @@
+# BIEVR-LIO sensor config for the Isaac Sim RMF-Obelix multirotor (sim/drone_sim.py), both lidar variants
+# (./sim.sh --robot rmf_obelix_ouster64 | rmf_obelix_avia: same mount; the Avia's longer range is cut at max_range_m).
+topics:
+  pointcloud: "/lidar/points"
+  imu: "/imu/data"
+
+calibration: # T_IMU_LIDAR (LiDAR -> IMU). IMU = frame centre; lidar at lidar_pos in config/robots.yaml, no rotation.
+  translation: [0.0, 0.0, 0.1]
+  rotation: [1, 0, 0,
+             0, 1, 0,
+             0, 0, 1]
+
+lidar:
+  min_range_m: 0.5 # Exclude points closer than this range [m]
+  max_range_m: 100

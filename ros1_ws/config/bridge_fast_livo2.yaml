@@ -1,0 +1,9 @@
+# ros1_bridge parameter_bridge topics for FAST-LIVO2 (ros1_ws/fast_livo2.sh; ROS 1 master on port 11312). The camera
+# line goes to a second bridge of its own (fast_livo2.sh), and only when images are used.
+topics:
+  - {topic: /clock, type: rosgraph_msgs/msg/Clock, queue_size: 1}                   # ROS 2 -> ROS 1
+  - {topic: /imu/data, type: sensor_msgs/msg/Imu, queue_size: 400}                  # ROS 2 -> ROS 1
+  - {topic: /lidar/points, type: sensor_msgs/msg/PointCloud2, queue_size: 5}       # ROS 2 -> ROS 1
+  - {topic: /camera/image_raw, type: sensor_msgs/msg/Image, queue_size: 5}         # ROS 2 -> ROS 1 (camera)
+  - {topic: /aft_mapped_to_init, type: nav_msgs/msg/Odometry, queue_size: 20}      # ROS 1 -> ROS 2: FAST-LIVO2's pose
+  - {topic: /way_point, type: geometry_msgs/msg/PointStamped, queue_size: 2}       # ROS 2 -> ROS 1: for its RViz

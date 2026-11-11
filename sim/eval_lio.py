@@ -1,12 +1,19 @@
-"""Drive a route via /cmd_vel and compare LIO odometry with ground truth.
+"""Drive (or fly) a route via /cmd_vel and compare LIO odometry with ground truth.
 python3 eval_lio.py [odom_topic]   (default /bievr_lio/odom)
-Route: list of (vx, wz, sim_seconds). LIO's odom frame is aligned to GT with the first matched pose (SE3)."""
-import sys, numpy as np, rclpy
+Route: list of (vx, vy, vz, wz, sim_seconds); a walk for the legged robots, a 3D flight for the drone (the robot ./sim.sh
+was started with, logs/.robot). LIO's odom frame is aligned to GT with the first matched pose (SE3)."""
+import sys, numpy as np, rclpy, yaml
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from scipy.spatial.transform import Rotation as R
 
-ROUTE = [(0.0, 0.0, 2), (0.6, 0.0, 15), (0.5, 0.4, 8), (0.6, 0.0, 15), (0.5, -0.4, 8), (0.6, 0.0, 15), (0.0, 0.0, 2)]
+WALK = [(0.0, 0, 0, 0.0, 2), (0.6, 0, 0, 0.0, 15), (0.5, 0, 0, 0.4, 8), (0.6, 0, 0, 0.0, 15), (0.5, 0, 0, -0.4, 8),
+        (0.6, 0, 0, 0.0, 15), (0.0, 0, 0, 0.0, 2)]
+# take off, a 3 x 3 m square at 1 m/s with climbs and descents, a turn in place, land-ish: needs ~4 m of free space
+FLY = [(0, 0, 0, 0, 2), (0, 0, 0.5, 0, 3), (1.0, 0, 0, 0, 3), (0, 1.0, 0.3, 0, 3), (-1.0, 0, -0.3, 0, 3),
+       (0, -1.0, 0, 0, 3), (0, 0, 0, 0.5, 6), (0.5, 0, 0, 0.3, 6), (0, 0, -0.5, 0, 2), (0, 0, 0, 0, 2)]
+ROBOT = open("/isaac_explore/logs/.robot").read().strip()
+ROUTE = FLY if yaml.safe_load(open("/isaac_explore/config/robots.yaml"))[ROBOT].get("type") == "aerial" else WALK
 topic = sys.argv[1] if len(sys.argv) > 1 else "/bievr_lio/odom"
 rclpy.init(); n = rclpy.create_node("eval_lio"); pub = n.create_publisher(Twist, "/cmd_vel", 10)
 gt, lio = {}, {}
@@ -17,8 +24,8 @@ key = lambda m: round((m.header.stamp.sec + m.header.stamp.nanosec * 1e-9) * 100
 n.create_subscription(Odometry, "/ground_truth/odom", lambda m: gt.__setitem__(key(m), T(m)), 50)
 n.create_subscription(Odometry, topic, lambda m: lio.__setitem__(key(m), T(m)), 50)
 while not gt: rclpy.spin_once(n, timeout_sec=0.5)
-for vx, wz, dur in ROUTE:
-    t0 = max(gt); c = Twist(); c.linear.x, c.angular.z = vx, wz
+for vx, vy, vz, wz, dur in ROUTE:
+    t0 = max(gt); c = Twist(); c.linear.x, c.linear.y, c.linear.z, c.angular.z = float(vx), float(vy), float(vz), float(wz)
     while max(gt) - t0 < dur * 100:
         pub.publish(c); rclpy.spin_once(n, timeout_sec=0.02)
 pub.publish(Twist())

@@ -15,8 +15,8 @@ RobotParams:
 #             all follows ROS convention (X-forward, Y-left, Z-Up).
 #-------------------------------------------------------------------------------
 SensorParams:
-  sensor_list:      ["OS1_32"]
-  OS1_32:
+  sensor_list:      ["lidar"]
+  lidar:
     type:           kLidar
     max_range:      20.0
     center_offset:  [0.0, 0.0, 0.25]  # lidar_pos of anymal_d
@@ -113,7 +113,7 @@ PlanningParams:
   type:             kAdaptiveExploration # Options: kBasicExploration, kAdaptiveExploration
   rr_mode:          kGraph
   bound_mode:       kExtremeBound
-  exp_sensor_list:  ["OS1_32"]
+  exp_sensor_list:  ["lidar"]
   no_gain_zones_list: ["g1"]
   edge_length_min:  0.1
   edge_length_max:  3.0

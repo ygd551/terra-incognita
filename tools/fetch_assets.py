@@ -109,8 +109,7 @@ def write_attribution():
     lines = ["# Third-party scene assets in assets/", "",
              "Downloaded from their original sources by `tools/fetch_assets.py` / `tools/add_scenes.sh`; not part of the "
              "repository. `sim/sdf_to_usd.py` converts them for Isaac Sim: format conversion to USD, all collision "
-             "geometry merged into one mesh, artifact models (backpacks, phones, mannequins, ...) left out. They keep "
-             "their licenses.", "",
+             "geometry merged into one mesh and all visual geometry into another. They keep their licenses.", "",
              "## DARPA Subterranean Challenge worlds",
              "[osrf/subt](https://github.com/osrf/subt) (commit ba15f9f), Apache-2.0, Copyright 2018 Open Source Robotics "
              "Foundation: " + ", ".join(sorted(f[:-4] for f in os.listdir(os.path.join(ASSETS, "subt", "worlds"))

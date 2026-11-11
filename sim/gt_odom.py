@@ -1,6 +1,9 @@
 """Ground-truth stand-in for BIEVR-LIO (explore.launch.py lio:=gt): same topics, frames and stamp convention, so the
-planning stack can be tested without localization errors. --robot go2|anymal_d selects the lidar mount
+planning stack can be tested without localization errors. --robot go2|anymal_d|rmf_obelix_ouster64|... selects the lidar mount
 (config/robots.yaml); explore.launch.py lio:=gt passes it.
+--pose TOPIC: another source of the base (= imu) pose instead of the ground truth, stamped with the time it refers to:
+  explore.launch.py lio:=fastlivo2 passes /aft_mapped_to_init (FAST-LIVO2 through ros1_bridge, ros1_ws/fast_livo2.sh),
+  whose own registered cloud only keeps the points the camera sees; this one is the whole scan.
   /ground_truth/odom + /lidar/points -> /bievr_lio/odom (odom -> imu, body-frame twist), TF odom -> imu,
                                          /bievr_lio/points/registered (frame odom, every point at its true position)
 Frame odom = the sim's world frame (so map coordinates equal world coordinates). Stamps = scan end, like BIEVR.
@@ -22,6 +25,7 @@ from sensor_msgs_py import point_cloud2 as pc2
 from tf2_ros import TransformBroadcaster
 
 ROBOT_NAME = sys.argv[sys.argv.index("--robot") + 1] if "--robot" in sys.argv else "go2"
+POSE_TOPIC = sys.argv[sys.argv.index("--pose") + 1] if "--pose" in sys.argv else "/ground_truth/odom"
 with open("/isaac_explore/config/robots.yaml") as f:
     LIDAR_POS = np.array(yaml.safe_load(f)[ROBOT_NAME]["lidar_pos"])  # mount in the base frame, no rotation
 OUT_DTYPE = np.dtype([("x", "<f4"), ("y", "<f4"), ("z", "<f4"), ("intensity", "<f4")])
@@ -90,14 +94,21 @@ def process(msg):
     tf.sendTransform(tr)
 
 
+MAX_STALE = 0.5   # s: a pose source this far behind a scan is dead or stuck (e.g. FAST-LIVO2 crashed): publish nothing
+
+
 def flush():
     # a scan is published by the sim as soon as its revolution ends, ground truth at the end of the policy step
-    # (<= 20 ms later): process a scan once ground truth reaches its end (or when scans pile up: extrapolate)
+    # (<= 20 ms later): process a scan once ground truth reaches its end (or when scans pile up: extrapolate a little)
     while scans and gt:
         msg, t_end = scans[0]
         if gt[-1][0] < t_end and len(scans) < 3:
             return
         scans.popleft()
+        if t_end - gt[-1][0] > MAX_STALE:   # holding the last pose would tell the planners the robot stopped
+            node.get_logger().warn(f"{POSE_TOPIC} is {t_end - gt[-1][0]:.1f} s behind the lidar: no odometry",
+                                   throttle_duration_sec=2.0)
+            continue
         process(msg)
 
 
@@ -127,7 +138,7 @@ node = rclpy.create_node("gt_odom", parameter_overrides=[Parameter("use_sim_time
 pub_odom = node.create_publisher(Odometry, "/bievr_lio/odom", 10)
 pub_cloud = node.create_publisher(PointCloud2, "/bievr_lio/points/registered", 5)
 tf = TransformBroadcaster(node)
-node.create_subscription(Odometry, "/ground_truth/odom", on_gt, 50)
+node.create_subscription(Odometry, POSE_TOPIC, on_gt, 50)
 node.create_subscription(PointCloud2, "/lidar/points", on_scan, 5)
-node.get_logger().info("ground-truth odometry: /ground_truth/odom + /lidar/points -> /bievr_lio/*")
+node.get_logger().info(f"odometry: {POSE_TOPIC} + /lidar/points -> /bievr_lio/*")
 rclpy.spin(node)

@@ -1,13 +1,23 @@
-# Lidar models the simulator emulates (./sim.sh --lidar NAME, default os1_32), read by sim/go2_sim.py and, for the
-# vertical field of view of GBPlanner2's sensor model, by ros1_ws/gbplanner.sh. All are spinning lidars with evenly
-# spaced beams, turning at 10 Hz, published in the same Ouster-style PointCloud2 (x y z intensity t): BIEVR-LIO, the
+# Lidar models the simulator emulates (./sim.sh --lidar NAME; default: the robot's `lidar` in config/robots.yaml, else
+# os1_32), read by sim/go2_sim.py, sim/drone_sim.py and, for GBPlanner2's sensor model (field of view), by
+# ros1_ws/gbplanner.sh. All publish the same Ouster-style PointCloud2 (x y z intensity t) at 10 Hz: BIEVR-LIO, the
 # elevation map, the CMU stack and TARE (fixed +-12 deg coverage model) need no change. The mount is per robot
-# (lidar_pos in config/robots.yaml). Not emulated: non-repetitive scan patterns (Livox, Unitree L1), intensity, noise.
+# (lidar_pos in config/robots.yaml), no rotation. Not emulated: intensity, noise, Unitree L1.
+# Spinning lidars with evenly spaced beams, turning at 10 Hz:
 #   channels: beams; vfov: [lowest, highest] beam elevation [deg]; cols: points per beam and revolution; range: [m]
 os1_32:  {channels: 32,  vfov: [-22.5, 22.5],   cols: 1024, range: 100}   # Ouster OS1-32 (default)
 os1_64:  {channels: 64,  vfov: [-22.5, 22.5],   cols: 1024, range: 100}   # Ouster OS1-64
 os1_128: {channels: 128, vfov: [-22.5, 22.5],   cols: 1024, range: 100}   # Ouster OS1-128
+os0_64:  {channels: 64,  vfov: [-45.0, 45.0],   cols: 1024, range: 50}    # Ouster OS0-64 (RMF-Obelix's)
 os0_128: {channels: 128, vfov: [-45.0, 45.0],   cols: 1024, range: 50}    # Ouster OS0-128, wide vertical view
 vlp16:   {channels: 16,  vfov: [-15.0, 15.0],   cols: 1800, range: 100}   # Velodyne VLP-16 (the real ANYmal's)
 hdl32:   {channels: 32,  vfov: [-30.67, 10.67], cols: 2170, range: 100}   # Velodyne HDL-32E
 xt32:    {channels: 32,  vfov: [-16.0, 15.0],   cols: 2000, range: 120}   # Hesai PandarXT-32
+# Livox (type: livox): a non-repetitive rosette scan (sim_common.rosette), looking along the mount's +x.
+#   hfov: horizontal field of view [deg]; vfov: [lowest, highest] elevation [deg]; rate: points/s; range: [m];
+#   prisms_hz: rotation of the two counter-rotating prisms that draw the rosette. Livox does not publish them: chosen
+#   so that the field of view fills in over time (1 x 1 deg cells hit: 37 % in 0.1 s, 86 % in 0.5 s, 99 % in 1 s;
+#   the pattern repeats after 10 s). A calibration knob, not a measured value.
+avia: {type: livox, hfov: 70.4, vfov: [-38.6, 38.6], rate: 240000, range: 190, prisms_hz: [120.7, 79.3]}
+#   Livox Avia (livoxtech.com/avia/specs): non-repetitive 70.4 x 77.2 deg, 240,000 points/s (first return),
+#   190 m at 10 % reflectivity

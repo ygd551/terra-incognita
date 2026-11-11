@@ -35,8 +35,9 @@ msg = f"[mesh_to_usd] {args.out}: {len(m.faces)} tris, bounds {np.round(m.bounds
 if args.spawn:
     s = np.load(args.spawn)
     p = s[np.argmin(np.linalg.norm(s[:, :2] - m.bounds.mean(0)[:2], axis=1))]
-    # terrain-generator stores spawn points 0.5 m above the floor (height_offset=0.5 in generate_with_wfc.py);
-    # go2_sim wants the base ~0.42 m above the floor
-    msg += f"; spawn near centre: --spawn {p[0]:.2f} {p[1]:.2f} {p[2] - 0.5 + 0.42:.2f}"
+    # terrain-generator stores spawn points 0.5 m above the floor (height_offset=0.5 in generate_with_wfc.py). Given
+    # only X Y, go2_sim puts each robot at its own height on the floor (the third value in scenes.yaml picks the floor)
+    msg += (f"; spawn near centre: ./sim.sh --spawn {p[0]:.2f} {p[1]:.2f}, or in config/scenes.yaml: "
+            f"{{spawn: [{p[0]:.2f}, {p[1]:.2f}, {p[2] - 0.5:.2f}], yaw: 0}}")
 print(msg, flush=True)
 app.close()

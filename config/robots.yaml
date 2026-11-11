@@ -1,7 +1,9 @@
 # Per-robot values, read by sim/go2_sim.py (--robot), launch/explore.launch.py (robot:=) and sim/gt_odom.py.
 # lidar_pos: lidar mount in the base frame (= BIEVR's imu frame), no rotation. Must equal the translation in
-# config/bievr_sim_<robot>.yaml (BIEVR reads its own file). checkpoint: relative to the project root, downloaded by
-# setup.sh (tools/fetch_assets.py).
+# config/bievr_sim_<model, else robot>.yaml (BIEVR reads its own file). checkpoint: relative to the project root,
+# downloaded by setup.sh (tools/fetch_assets.py). lidar: the default ./sim.sh --lidar (config/lidars.yaml; os1_32 when
+# absent). sim.sh and explore.sh grep `type` and `lidar` in each robot's own lines: write them there, not only in an
+# anchor merged with <<.
 go2:
   checkpoint: assets/checkpoints/go2_rough.pt   # Isaac-Velocity-Rough-Unitree-Go2-v0
   lidar_pos: [0.10, 0.0, 0.15]   # ~0.45 m above ground when standing
@@ -20,3 +22,47 @@ anymal_d:
   vehicle_height: 1.0            # ~0.9 m with the lidar
   obstacle_height: 0.2           # rough-terrain policy is trained on steps up to ~0.23 m
   viewpoint_height: 0.75         # = CMU default
+# RMF-Obelix, NTNU's Resilient Micro Flyer as modelled in ntnu-arl/rotors_simulator (branch dev/rmf_obelix):
+# sim/drone_sim.py. Two variants of the same airframe (model: assets/drones/rmf_obelix/, config/bievr_sim_rmf_obelix.yaml,
+# ros1_ws/config/*_rmf_obelix.yaml; mass, inertia, rotors and the collider of drone_to_usd.py unchanged), differing
+# only in the lidar at the same mount: with the Ouster OS0-64 of the original, or with a Livox Avia looking forward.
+rmf_obelix_ouster64: &rmf_obelix
+  type: aerial
+  model: rmf_obelix
+  lidar: os0_64                 # Ouster OS0-64, as on the real RMF-Obelix
+  lidar_pos: [0.0, 0.0, 0.1]    # on top of the frame (RotorS: 0.1 m above base_link)
+  camera:                       # front colour camera (sim/drone_sim.py, off with --no_camera) as on RMF-Owl, of the same
+                                # NTNU RMF family (RMF-Obelix's own is not published): FLIR Blackfly S 0.4 MP, FoV 85 x 64 deg
+                                # ("RMF-Owl", arXiv:2202.11055; resolution from arXiv:2404.19045)
+    pos: [0.15, 0.0, 0.0]       # front edge of the frame, looking forward (+x)
+    width: 720
+    height: 540
+    hfov: 85.0                  # deg; a pinhole with square pixels -> 69 deg vertical (the real lens's 64: distortion)
+    hz: 10
+  led:                          # RMF-Owl's Lumenier LED, next to the camera, same direction (--light dark lights the scene
+    pos: [0.15, 0.0, -0.03]     # with it alone). Brightness and cone are tuned to look plausible, not measured.
+    intensity: 100000000.0
+    cone: 90.0                  # deg, full angle
+  spawn_z: 0.085                # frame centre above the floor when landed (half of the 0.15 m frame + 1 cm)
+  frame_size: [0.29, 0.32, 0.15]  # collision box = bounds of the RotorS mesh (frame with protective foam rings)
+  mass: 0.5265                  # kg, RotorS rmf_obelix.yaml (the controller assumes the same)
+  inertia: [0.01, 0.01, 0.01]   # kg m^2, diagonal
+  rotors:                       # angle [rad], arm [m], direction (1 = counter-clockwise); RotorS order
+    - {angle: -0.785398, arm: 0.1, direction: 1.0}
+    - {angle: 2.35619, arm: 0.1, direction: 1.0}
+    - {angle: 0.78539, arm: 0.1, direction: -1.0}
+    - {angle: -2.35619, arm: 0.1, direction: -1.0}
+  rotor_force_constant: 8.54858e-06   # N / (rad/s)^2
+  rotor_moment_constant: 0.016        # m: drag torque = constant x thrust
+  rotor_drag_coefficient: 8.06428e-05 # N s / m per rad/s: rotor drag against the body's sideways velocity
+  rotor_max_speed: 2000.0             # rad/s
+  rotor_time_constants: [0.0125, 0.025]  # s, speeding up / slowing down
+  lee_gains:                    # RotorS lee_controller_rmf_obelix.yaml
+    position: [2.0, 2.0, 2.0]
+    velocity: [1.2, 1.2, 1.2]
+    attitude: [0.7, 0.7, 0.015]
+    angular_rate: [0.12, 0.12, 0.012]
+rmf_obelix_avia:
+  <<: *rmf_obelix
+  type: aerial
+  lidar: avia                   # Livox Avia at the same mount, its 70.4 x 77.2 deg field of view centred on +x (forward)

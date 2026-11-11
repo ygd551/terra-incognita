@@ -1,0 +1,84 @@
+# FAST-LIVO2 (hku-mars/FAST-LIVO2, GPL-2.0) on the Isaac Sim robots: the values common to all of them, from its
+# config/avia.yaml (Livox Avia + camera) and config/NTU_VIRAL.yaml (Ouster + camera). The per-robot ones (img_en,
+# extrinsics, point_filter_num, camera intrinsics) are written by ros1_ws/fast_livo2.sh from config/robots.yaml and
+# config/lidars.yaml into logs/fast_livo2_<robot>.yaml, loaded after this file.
+common:
+  img_topic: "/camera/image_raw"   # sim_common.CameraOut (rgb8)
+  lid_topic: "/lidar/points"       # sim_common.Sensors: x y z intensity t (uint32 ns from the stamp = scan start)
+  imu_topic: "/imu/data"           # 200 Hz, m/s^2 (FAST-LIVO2 rescales by the measured gravity anyway)
+  lidar_en: 1
+  ros_driver_bug_fix: false
+
+time_offset:                       # one clock: the sim's
+  lidar_time_offset: 0.0
+  imu_time_offset: 0.0
+  img_time_offset: 0.0
+  exposure_time_init: 0.0
+
+preprocess:
+  filter_size_surf: 0.1
+  lidar_type: 3                    # Ouster handler: the only fields it reads are x y z intensity t, which the sim sends
+                                   # (also for the Livox Avia emulation: its handler expects Livox's CustomMsg)
+  scan_line: 64                    # only used with feature extraction (off)
+  blind: 0.5                       # m, as BIEVR's min_range_m
+
+vio:
+  max_iterations: 5
+  outlier_threshold: 1000
+  img_point_cov: 100
+  patch_size: 8
+  patch_pyrimid_level: 3           # 720 x 540 images (NTU_VIRAL 752 x 480: 3; avia 1280 x 1024: 4)
+  normal_en: true
+  raycast_en: false
+  inverse_composition_en: false
+  exposure_estimate_en: true
+  inv_expo_cov: 0.1
+
+imu:
+  imu_en: true
+  imu_int_frame: 30
+  acc_cov: 0.5
+  gyr_cov: 0.3
+  b_acc_cov: 0.0001
+  b_gyr_cov: 0.0001
+
+lio:
+  max_iterations: 5
+  dept_err: 0.02
+  beam_err: 0.05
+  min_eigen_value: 0.0025
+  voxel_size: 0.5
+  max_layer: 2
+  max_points_num: 50
+  layer_init_num: [5, 5, 5, 5, 5]
+
+local_map:
+  map_sliding_en: false
+  half_map_size: 100
+  sliding_thresh: 8
+
+uav:
+  imu_rate_odom: false
+  gravity_align_en: false          # the robots start level: the start frame is already gravity aligned
+
+publish:
+  dense_map_en: true
+  pub_effect_point_en: false
+  pub_plane_en: false
+  pub_scan_num: 1
+  blind_rgb_points: 0.0
+
+evo:
+  seq_name: "isaac_explore"
+  pose_output_en: false
+
+pcd_save:                          # the colored map: ros1_ws/src/FAST-LIVO2/Log/pcd/all_raw_points.pcd (+ downsampled),
+  pcd_save_en: true                # written when the node stops (fast_livo2.sh stop sends SIGINT and waits)
+  type: 0                          # world frame
+  colmap_output_en: false
+  filter_size_pcd: 0.1               # m: also the leaf that keeps the map in memory bounded (patch)
+  interval: -1                     # all frames into one file
+
+image_save:
+  img_save_en: false
+  interval: 1

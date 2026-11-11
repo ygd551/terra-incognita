@@ -1,12 +1,13 @@
 """Full autonomy stack for the Isaac Sim Go2 / ANYmal D (run inside the isaac_explore container, see ../explore.sh).
 
   ros2 launch /isaac_explore/launch/explore.launch.py [robot:=anymal_d] [planner:=false] [exploration:=false] [elevation:=false]
-                                                      [rviz:=false] [lio:=gt] [speed:=1.0]
+                                                      [rviz:=false] [lio:=gt|fastlivo2] [speed:=1.0]
 
 robot:= must match go2_sim.py --robot: lidar mount, footprint and heights come from config/robots.yaml.
 
 lio:=gt replaces BIEVR-LIO by sim/gt_odom.py (ground truth, same topics/frames) to test planning without
-localization errors.
+localization errors. lio:=fastlivo2 localizes with FAST-LIVO2 (ROS 1, ros1_ws/fast_livo2.sh, started by ../explore.sh):
+its pose (/aft_mapped_to_init) goes through sim/gt_odom.py --pose into the same topics/frames.
 
 Data flow:
   /lidar/points + /imu/data --BIEVR-LIO--> /bievr_lio/odom, /bievr_lio/points/registered, TF odom->imu
@@ -41,7 +42,7 @@ def xml(path, **args):
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument("robot", default_value="go2", choices=["go2", "anymal_d"],
+        DeclareLaunchArgument("robot", default_value="go2", choices=list(yaml.safe_load(open(f"{CFG}/robots.yaml"))),
                               description="must match go2_sim.py --robot (config/robots.yaml)"),
         DeclareLaunchArgument("planner", default_value="true", description="TARE exploration + CMU local planner"),
         DeclareLaunchArgument("exploration", default_value="true",
@@ -51,8 +52,9 @@ def generate_launch_description():
         DeclareLaunchArgument("speed", default_value="1.0",
                               description="top walking speed [m/s] (CMU maxSpeed = autonomySpeed); the policies are "
                                           "trained up to 1.0, and go2_sim clamps there"),
-        DeclareLaunchArgument("lio", default_value="bievr", choices=["bievr", "gt"],
-                              description="bievr = BIEVR-LIO, gt = ground truth from the sim (sim/gt_odom.py)"),
+        DeclareLaunchArgument("lio", default_value="bievr", choices=["bievr", "gt", "fastlivo2"],
+                              description="bievr = BIEVR-LIO, gt = ground truth from the sim (sim/gt_odom.py), "
+                                          "fastlivo2 = FAST-LIVO2 (ros1_ws/fast_livo2.sh, started by explore.sh)"),
         SetParameter(name="use_sim_time", value=True),  # everything runs on go2_sim's /clock
         OpaqueFunction(function=stack),
     ])
@@ -72,16 +74,29 @@ def stack(context):
     robot = LaunchConfiguration("robot").perform(context)
     R = yaml.safe_load(open(f"{CFG}/robots.yaml"))[robot]
     planner, elevation, rviz = LaunchConfiguration("planner"), LaunchConfiguration("elevation"), LaunchConfiguration("rviz")
+    # a drone (type: aerial) flies with GBPlanner2 (explore.sh): no terrain analysis, CMU local planner, TARE or
+    # elevation map, which are for walking robots; localization, mapping, metrics and RViz as for them
+    ground = R.get("type") != "aerial"
     speed = float(LaunchConfiguration("speed").perform(context))
     return [
         Node(package="tf2_ros", executable="static_transform_publisher", name="imu_to_lidar",
              arguments=[*map(str, R["lidar_pos"]), "0", "0", "0", "imu", "lidar"]),
+        # camera: ROS optical frame (z forward, x right, y down) of a camera looking along the robot's +x
+        *([Node(package="tf2_ros", executable="static_transform_publisher", name="imu_to_camera",
+                arguments=[*map(str, R["camera"]["pos"]), "-1.5707963", "0", "-1.5707963", "imu", "camera"])]
+          if "camera" in R else []),
         Node(package="bievr_lio_ros2", executable="process_topics", name="bievr_lio", output="screen",
              condition=LaunchConfigurationEquals("lio", "bievr"),
-             arguments=["--sensor_config_file", f"{CFG}/bievr_sim_{robot}.yaml", "--params_file", f"{CFG}/bievr_params.yaml"]),
+             arguments=["--sensor_config_file", f"{CFG}/bievr_sim_{R.get('model', robot)}.yaml",
+                        "--params_file", f"{CFG}/bievr_params.yaml"]),
 
         ExecuteProcess(cmd=["python3", "/isaac_explore/sim/gt_odom.py", "--robot", robot], name="gt_odom", output="screen",
                        condition=LaunchConfigurationEquals("lio", "gt")),
+        ExecuteProcess(cmd=["python3", "/isaac_explore/sim/gt_odom.py", "--robot", robot, "--pose", "/aft_mapped_to_init"],
+                       name="fastlivo2_odom", output="screen", condition=LaunchConfigurationEquals("lio", "fastlivo2")),
+        # ideal artifact detector (lidar hits on the scene's SubT artifacts) -> /artifacts/markers, RViz "Artifacts"
+        ExecuteProcess(cmd=["python3", "/isaac_explore/sim/artifacts.py", "--robot", robot], name="artifacts",
+                       output="screen"),
 
         GroupAction(condition=IfCondition(planner), actions=[
             Node(package="loam_interface", executable="loamInterface", name="loamInterface", output="screen",
@@ -89,6 +104,7 @@ def stack(context):
                               "registeredScanTopic": "/bievr_lio/points/registered",
                               "flipStateEstimation": False, "flipRegisteredScan": False,
                               "sendTF": True, "reverseTF": False}]),
+            *([] if not ground else [
             xml(f"{CMU}/terrain_analysis.launch", vehicleHeight=R["vehicle_height"]),
             xml(f"{CMU}/terrain_analysis_ext.launch", checkTerrainConn="true", vehicleHeight=R["vehicle_height"]),
             xml(os.path.join(share("sensor_scan_generation"), "launch", "sensor_scan_generation.launch")),
@@ -102,7 +118,7 @@ def stack(context):
             # must stand still while BIEVR estimates the IMU bias
             TimerAction(period=5.0, condition=IfCondition(LaunchConfiguration("exploration")), actions=[
                 Node(package="tare_planner", executable="tare_planner_node", name="tare_planner_node", output="screen",
-                     parameters=[f"{CFG}/tare_go2.yaml", tare_override(robot, R)])]),
+                     parameters=[f"{CFG}/tare_go2.yaml", tare_override(robot, R)])])]),
             # exploration metrics: explored volume (0.5 m voxels of /registered_scan), travelled distance, time
             # -> /isaac_explore/logs/metrics_<date-time>.txt and trajectory_<date-time>.txt
             Node(package="visualization_tools", executable="visualizationTools", name="visualizationTools",
@@ -117,8 +133,9 @@ def stack(context):
                  arguments=["-d", os.path.join(share("tare_planner"), "tare_planner_ground.rviz")]),
         ]),
 
+        *([] if not ground else [
         Node(package="elevation_mapping_cupy", executable="elevation_mapping_node.py", name="elevation_mapping_node",
              output="screen", condition=IfCondition(elevation),
              parameters=[os.path.join(share("elevation_mapping_cupy"), "config", "core", "core_param.yaml"),
-                         f"{CFG}/elevation_sim.yaml"]),
+                         f"{CFG}/elevation_sim.yaml"])]),
     ]
