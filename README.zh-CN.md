@@ -236,6 +236,7 @@ tools/check_scenes.sh simple_tunnel_01                  # 可选：检查机器�
 | 综合决赛场地 | `finals_practice_01..03`、`finals_qual` |
 | 城市地下 | `simple_urban_01..03`、`urban_circuit_practice_01..03` |
 | [gbplanner_ros](https://github.com/ntnu-arl/gbplanner_ros) 示例（`ros1_ws/add_gbp_scenes.sh`） | `gbp_darpa_cave_01/02`（与 `simple_cave_01/02` 布局相同，分块较旧）、`gbp_edgar_mine`、`gbp_pittsburgh_mine`、`gbp_virginia_mine`（真实矿洞扫描）、`gbp_urban_cave_transition` |
+| 长直隧道，用于测试 SLAM（`python3 tools/make_long_tunnel.py [长度_米]`，然后 `tools/add_scenes.sh long_tunnel_1000m`） | `long_tunnel_1000m`：隧道出发区之后，是 1000 m 由完全相同的 SubT 直隧道段（宽 6 m、高 4 m）沿 +x 拼成的隧道，尽头封闭。单帧扫描对沿隧道方向运动的约束最弱，约为竖直方向的四分之一（隧道段上的拱肋仍提供一些约束，并且每隔几米重复一次）。要让封闭的尽头保持在雷达量程之外（Avia 190 m） |
 
 全部 33 个额外场景约需下载 2 GB、占用磁盘约 4 GB，每个场景转换约需 15–60 s。这些场景的出处和许可证见[许可证](#许可证)一节。SubT 世界的出生点在比赛的集结区，即赛道入口前 8 m。新增的世界需要在 `config/scenes.yaml` 里加一行（`tools/scene_spawn.py 场景名 X Y` 可以帮忙找一块空地）。SubT 场景按 Gazebo 的方式转换：雷达扫到的是可见模型（出发区画出来的栅栏和岩壁、粗糙隧道段的岩面细节），机器人碰撞用的是碰撞模型（包括出发区的隐形墙）；SubT 的目标物（幸存者假人、手机、背包等）和基站都在场景里，`sim/scenes/场景名.artifacts.yaml` 列出了每个目标物的真实位置。机器人经过后才由事件放下的废墟墙不放进场景，和比赛开始时一样。
 
@@ -454,6 +455,7 @@ docker exec -it isaac_explore /workspace/isaaclab/_isaac_sim/python.sh -m tensor
 
 | 版本 | 内容 |
 |---|---|
+| v3.1.0 | 用于测试 SLAM 的长直隧道（`tools/make_long_tunnel.py`，场景 `long_tunnel_1000m`，见[更多场景](#更多场景)）：隧道出发区之后是 1000 m 由相同的 SubT 直隧道段拼成的隧道，尽头封闭且在雷达量程之外 |
 | v3.0.0 | RMF-Obelix 无人机：按物理过程仿真的飞行（旋翼推力、电机延迟、旋翼阻力、RotorS 的 Lee 几何控制器），搭载 Ouster OS0-64 或 Livox Avia（`./sim.sh --robot rmf_obelix_ouster64`、`rmf_obelix_avia`；Avia 的非重复扫描对所有机器人都可用 `--lidar avia`），GBPlanner2 按雷达视场做空中探索，飞行和传感器测试（`tools/add_drone.sh`）；ANYmal D 行走评测与微调（`sim/bench_walk.py`、`sim/train_walk.py`、`./sim.sh --checkpoint`）；SubT 场景和 Gazebo 一致：雷达扫可见模型（能看到出发区的栅栏），场景里有目标物和基站，并附目标物真实位置列表，SubT 隧道段的纹理（之前转换的场景需要重新转换，见[常见问题](#常见问题)）；无人机的前置相机和 LED，地下场景默认黑暗（`--light`）；在 RViz 中显示已识别的目标物（`sim/artifacts.py`，目前是理想检测器）；GBPlanner2 的 RViz 只显示候选路径、选中路径和执行路径；用 FAST-LIVO2 定位并用无人机相机建彩色地图（`lio:=fastlivo2`，可选） |
 | v2.1.0 | 可用 `./sim.sh --lidar` 选择激光雷达型号：Ouster OS1-32（默认）、OS1-64、OS1-128、OS0-128，Velodyne VLP-16、HDL-32E，禾赛 PandarXT-32（`config/lidars.yaml`）；GBPlanner2 的传感器模型跟随垂直视场；GBPlanner2 截图 |
 | v2.0.0 | 新增可选的探索规划器 GBPlanner2（ROS 1 容器 + `ros1_bridge`），以及与 TARE 对比的工具；新增 33 个场景（`tools/add_scenes.sh`、`./sim.sh --scene 场景名 / --list`，出生位姿在 `config/scenes.yaml`，SubT 世界中的地板盒子对高度扫描和雷达可见）；仿真端的卡住和摔倒判定也能识别卡在石头间的情况；RViz 中显示轨迹和局部路径；实测的坡度上限；场景署名清单 |

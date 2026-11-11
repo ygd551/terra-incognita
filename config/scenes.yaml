@@ -38,5 +38,7 @@ gbp_edgar_mine: {spawn: [0.0, 0.0, 0.2], yaw: 0}
 gbp_pittsburgh_mine: {spawn: [0.0, 0.0, 0.2], yaw: 0}
 gbp_virginia_mine: {spawn: [0.0, 0.0, -0.3], yaw: 0}
 gbp_urban_cave_transition: {spawn: [0.0, 0.0, 1.2], yaw: 0}   # the tile's west end (it spans x -5..35)
+# long straight tunnel for SLAM tests (tools/make_long_tunnel.py): SubT staging area, then the tunnel along +x
+long_tunnel_1000m: {spawn: [2.0, 0.0, 0.0], yaw: 0}
 # procedurally generated (terrain_gen/, sim/mesh_to_usd.py)
 tg_indoor_5: {spawn: [0.0, 0.0, -0.9], yaw: 0}
